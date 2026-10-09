@@ -685,7 +685,7 @@ async function nameToSyntheticEmail(name){
   const bytes=new TextEncoder().encode(normalized);
   const hash=await crypto.subtle.digest("SHA-256",bytes);
   const hex=[...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("");
-  return `u_${hex.slice(0,40)}@hwdk-assembly.com`;
+  return `assembly.${hex.slice(0,40)}@daekong.com`;
 }
 
 function hideAllMain(){authScreen.classList.add("hidden");moduleHome.classList.add("hidden");scheduleApp.classList.add("hidden");$("productionDashboardApp")?.classList.add("hidden");$("boardApp")?.classList.add("hidden");bhdApp.classList.add("hidden");requestApp.classList.add("hidden");myWorkApp.classList.add("hidden")}
