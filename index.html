@@ -93,6 +93,9 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
 .board-card{border-left:5px solid #d9a72b}
 .board-card-focus{box-shadow:0 0 0 2px rgba(217,119,6,.35)}
 .board-content{margin-top:9px;padding:10px;background:#f7f9fb;border-radius:7px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}
+
+/* ===== 조립 품질검사 / 품질결과 알림 ===== */
+.quality-checklist{display:grid;gap:8px;margin-top:12px}.quality-check-row{display:grid;grid-template-columns:minmax(220px,1.25fr) 130px minmax(200px,1fr);gap:8px;align-items:center;padding:10px;border:1px solid #e0e6eb;border-radius:9px;background:#fafcfd}.quality-check-name{font-weight:800;color:#243b53;line-height:1.4}.quality-check-row select,.quality-check-row input{margin:0}.quality-overall-note{margin-top:10px;min-height:90px}.quality-read-grid{display:grid;gap:6px;margin-top:10px}.quality-read-row{display:grid;grid-template-columns:minmax(0,1fr) 90px;gap:6px;padding:8px;border:1px solid #e3e8ec;border-radius:8px;background:#fafcfd}.quality-read-row.ok{background:#eef9f3;border-color:#b7dfc7}.quality-read-row.ng{background:#fff0f0;border-color:#e2aaaa}.quality-read-row.na{background:#f4f5f6}.quality-read-name{font-size:13px;font-weight:800}.quality-read-result{font-size:12px;font-weight:900;text-align:right}.quality-read-note{grid-column:1/-1;font-size:12px;color:#5f6b76;line-height:1.5}.mywork-section-title{margin:15px 0 8px;padding:8px 10px;border-left:5px solid #16324f;background:#eef5fb;color:#16324f;font-weight:900;border-radius:6px}@media(max-width:720px){.quality-check-row{grid-template-columns:1fr}.quality-read-row{grid-template-columns:1fr auto}}
 </style>
 </head>
 <body>
@@ -207,8 +210,8 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
         <div class="dashboard-section-title">2. 품질관리</div>
         <div class="dashboard-grid">
           <button id="openBhdBtn" class="module-btn module-bhd">
-            <span class="module-name">결선작업관리</span>
-            <span class="module-sub">BHD 등록 · 조회 · 후작업 관리</span>
+            <span class="module-name">작업품질검사</span>
+            <span class="module-sub">BLK 조립공정 검사 · 합격/불합격 · 결과관리</span>
           </button>
           <button class="module-btn module-dev" disabled>
             <span class="module-name">품질검사일정</span>
@@ -765,33 +768,22 @@ async function refreshNotificationBadge(){
     return;
   }
 
-  const [incoming,completed]=await Promise.all([
-    supabase.from("assembly_check_requests")
-      .select("id",{count:"exact",head:true})
-      .contains("requested_to_user_ids",[currentUserId])
-      .eq("status","pending"),
-    supabase.from("assembly_check_requests")
-      .select("id",{count:"exact",head:true})
-      .eq("created_by",currentUserId)
-      .eq("status","completed")
-      .eq("author_reconfirmed",false)
-      .is("author_completion_read_at",null)
+  const [incoming,completed,qualityResult]=await Promise.all([
+    supabase.from("assembly_check_requests").select("id",{count:"exact",head:true}).contains("requested_to_user_ids",[currentUserId]).eq("status","pending"),
+    supabase.from("assembly_check_requests").select("id",{count:"exact",head:true}).eq("created_by",currentUserId).eq("status","completed").eq("author_reconfirmed",false).is("author_completion_read_at",null),
+    supabase.from("assembly_workflow").select("id",{count:"exact",head:true}).eq("created_by",currentUserId).eq("process_confirmed",true).in("quality_status",["합격","불합격"]).is("quality_result_read_at",null)
   ]);
 
   if(incoming.error||completed.error)return;
-
-  const n=Number(incoming.count||0)+Number(completed.count||0);
+  const n=Number(incoming.count||0)+Number(completed.count||0)+Number(qualityResult.error?0:(qualityResult.count||0));
 
   for(const id of ["notificationCount","myWorkHomeCount"]){
-    const el=$(id);
-    if(!el)continue;
+    const el=$(id);if(!el)continue;
     el.textContent=n>99?"99+":String(n);
     el.classList.toggle("hidden",n===0);
   }
-
   if(lastUnreadCount>=0&&n>lastUnreadCount)document.title=`(${n}) HWDK 조립 관리시스템`;
   else if(n===0)document.title="HWDK 조립 관리시스템";
-
   lastUnreadCount=n;
 }
 
@@ -2739,140 +2731,56 @@ $("refreshRequestListBtn").onclick=loadRequestList;
 $("reqListHideCompleted").onchange=loadRequestList;
 
 /* ---------- 나의 업무 / 알림 ---------- */
+function qualityChecklistReadOnlyHtml(checklist){
+  const items=Array.isArray(checklist?.items)?checklist.items:[];
+  if(!items.length)return '<div class="hint">세부 검사항목 기록이 없습니다.</div>';
+  return `<div class="quality-read-grid">${items.map(item=>{const result=String(item.result||"-");const cls=result==="적합"?"ok":result==="부적합"?"ng":result==="해당없음"?"na":"";return `<div class="quality-read-row ${cls}"><div class="quality-read-name">${escapeHtml(item.label||item.key||"-")}</div><div class="quality-read-result">${escapeHtml(result)}</div>${item.note?`<div class="quality-read-note">${escapeHtml(item.note)}</div>`:""}</div>`}).join("")}</div>`;
+}
+async function markQualityResultRead(record){
+  if(!record||record.created_by!==currentUserId||record.quality_result_read_at)return;
+  const now=new Date().toISOString();
+  const {error}=await supabase.from("assembly_workflow").update({quality_result_read_at:now,quality_result_read_by:currentUserId,updated_at:now}).eq("id",record.id).eq("created_by",currentUserId);
+  if(error){alert("품질결과 확인 처리 실패: "+error.message);return}refreshNotificationBadge();loadMyWork();
+}
+function qualityResultCard(record){
+  const card=document.createElement("div"),unread=!record.quality_result_read_at;
+  card.className=`request-card ${record.quality_status==="합격"?"completed":"pending"}${unread?" mywork-unread":""}`;
+  const badge=record.quality_status==="합격"?'<span class="badge badge-completed">품질 합격</span>':'<span class="badge badge-delete">품질 불합격</span>';
+  card.innerHTML=`<div class="record-top"><div class="record-title">품질검사 결과 · ${escapeHtml(record.ship_no||"-")} / BLK ${escapeHtml(record.blk_no||"-")}</div><div>${badge}${unread?' <span class="new-badge">NEW</span>':""}</div></div><div class="record-meta">공정: ${escapeHtml(record.process_step||"-")} · ${Number(record.attempt_no||1)}차<br>작업자: ${escapeHtml(record.author_name||"-")} · 검사자: ${escapeHtml(record.quality_checked_name||"-")}<br>검사일시: ${escapeHtml(formatDateTime(record.quality_checked_at))}</div><div class="request-content-preview"><strong>종합 판정 의견</strong><br>${escapeHtml(record.quality_note||"-")}</div>${qualityChecklistReadOnlyHtml(record.quality_checklist)}`;
+  if(unread){const actions=document.createElement("div");actions.className="request-actions";const btn=document.createElement("button");btn.className="success";btn.textContent="품질결과 확인 완료";btn.onclick=()=>markQualityResultRead(record);actions.appendChild(btn);card.appendChild(actions)}
+  return card;
+}
 async function loadMyWork(){
-  const c=$("myWorkList");
-  const st=$("myWorkStatus");
-  c.innerHTML="";
-
-  if(isAdmin){
-    st.textContent="관리자 계정에는 개인 지정 업무가 없습니다. 업무요청 목록에서 전체 자료를 관리할 수 있습니다.";
-    return;
-  }
-
+  const c=$("myWorkList"),st=$("myWorkStatus");c.innerHTML="";
+  if(isAdmin){st.textContent="관리자 계정에는 개인 지정 업무가 없습니다. 업무요청 목록과 작업품질검사에서 전체 자료를 관리할 수 있습니다.";return}
   st.textContent="나의 업무 불러오는 중...";
-
-  const [assigned,legacyAssigned,authored]=await Promise.all([
+  const [assigned,legacyAssigned,authored,qualityResults]=await Promise.all([
     supabase.from("assembly_check_requests").select("*").contains("requested_to_user_ids",[currentUserId]).order("created_at",{ascending:false}),
     supabase.from("assembly_check_requests").select("*").eq("requested_to_user_id",currentUserId).order("created_at",{ascending:false}),
-    supabase.from("assembly_check_requests").select("*").eq("created_by",currentUserId).order("created_at",{ascending:false})
+    supabase.from("assembly_check_requests").select("*").eq("created_by",currentUserId).order("created_at",{ascending:false}),
+    supabase.from("assembly_workflow").select("*").eq("created_by",currentUserId).eq("process_confirmed",true).in("quality_status",["합격","불합격"]).order("quality_checked_at",{ascending:false}).limit(100)
   ]);
-
-  const firstError=assigned.error||legacyAssigned.error||authored.error;
-  if(firstError){
-    st.textContent="나의 업무 조회 실패: "+firstError.message;
-    return;
-  }
-
-  const byId=new Map();
-  [...(assigned.data||[]),...(legacyAssigned.data||[]),...(authored.data||[])].forEach(r=>byId.set(r.id,r));
-  const items=[...byId.values()];
-
-  items.sort((a,b)=>{
-    const aNew=(isAssignedToMe(a)&&a.status!=="completed")||(a.created_by===currentUserId&&a.status==="completed"&&!a.author_reconfirmed&&!a.author_completion_read_at);
-    const bNew=(isAssignedToMe(b)&&b.status!=="completed")||(b.created_by===currentUserId&&b.status==="completed"&&!b.author_reconfirmed&&!b.author_completion_read_at);
-    const aReconfirm=a.created_by===currentUserId&&a.status==="completed"&&!a.author_reconfirmed;
-    const bReconfirm=b.created_by===currentUserId&&b.status==="completed"&&!b.author_reconfirmed;
-    return Number(bNew)-Number(aNew)||Number(bReconfirm)-Number(aReconfirm)||Number(a.status==="completed")-Number(b.status==="completed")||new Date(b.created_at)-new Date(a.created_at);
-  });
-
-  const incomingPending=items.filter(x=>isAssignedToMe(x)&&x.status!=="completed").length;
-  const reconfirmPending=items.filter(x=>x.created_by===currentUserId&&x.status==="completed"&&!x.author_reconfirmed).length;
-  const deleteReady=items.filter(x=>x.created_by===currentUserId&&x.delete_ready).length;
-
-  st.textContent=`전체 ${items.length}건 · 확인대기 ${incomingPending}건 · 재확인대기 ${reconfirmPending}건 · 삭제가능 ${deleteReady}건`;
-
-  if(!items.length)c.innerHTML='<div class="empty">현재 나의 업무 또는 재확인 업무가 없습니다.</div>';
-
-  items.forEach(r=>c.appendChild(requestCard(r)));
+  const firstError=assigned.error||legacyAssigned.error||authored.error;if(firstError){st.textContent="나의 업무 조회 실패: "+firstError.message;return}
+  const byId=new Map();[...(assigned.data||[]),...(legacyAssigned.data||[]),...(authored.data||[])].forEach(r=>byId.set(r.id,r));const items=[...byId.values()];
+  items.sort((a,b)=>{const aNew=(isAssignedToMe(a)&&a.status!=="completed")||(a.created_by===currentUserId&&a.status==="completed"&&!a.author_reconfirmed&&!a.author_completion_read_at);const bNew=(isAssignedToMe(b)&&b.status!=="completed")||(b.created_by===currentUserId&&b.status==="completed"&&!b.author_reconfirmed&&!b.author_completion_read_at);const aReconfirm=a.created_by===currentUserId&&a.status==="completed"&&!a.author_reconfirmed;const bReconfirm=b.created_by===currentUserId&&b.status==="completed"&&!b.author_reconfirmed;return Number(bNew)-Number(aNew)||Number(bReconfirm)-Number(aReconfirm)||new Date(b.created_at)-new Date(a.created_at)});
+  const qItems=qualityResults.error?[]:(qualityResults.data||[]);qItems.sort((a,b)=>Number(!b.quality_result_read_at)-Number(!a.quality_result_read_at)||new Date(b.quality_checked_at||b.updated_at)-new Date(a.quality_checked_at||a.updated_at));
+  const incomingPending=items.filter(x=>isAssignedToMe(x)&&x.status!=="completed").length,reconfirmPending=items.filter(x=>x.created_by===currentUserId&&x.status==="completed"&&!x.author_reconfirmed).length,qualityUnread=qItems.filter(x=>!x.quality_result_read_at).length;
+  st.textContent=`업무요청 ${items.length}건 · 확인대기 ${incomingPending}건 · 재확인대기 ${reconfirmPending}건 · 품질결과 미확인 ${qualityUnread}건`;
+  if(qItems.length){const title=document.createElement("div");title.className="mywork-section-title";title.textContent="조립공정 품질검사 결과";c.appendChild(title);qItems.forEach(r=>c.appendChild(qualityResultCard(r)))}
+  if(items.length){const title=document.createElement("div");title.className="mywork-section-title";title.textContent="업무요청 / 재확인";c.appendChild(title);items.forEach(r=>c.appendChild(requestCard(r)))}
+  if(!items.length&&!qItems.length)c.innerHTML='<div class="empty">현재 나의 업무 또는 품질검사 결과가 없습니다.</div>';
   refreshNotificationBadge();
 }
-
 function showMyWork(push=true){hideAllMain();showHeader();myWorkApp.classList.remove("hidden");loadMyWork();if(push)pushState({screen:"mywork",admin:isAdmin})}
-$("openMyWorkBtn").onclick=()=>showMyWork(true);
-$("notificationBtn").onclick=()=>showMyWork(true);
-$("refreshMyWorkBtn").onclick=loadMyWork;
+$("openMyWorkBtn").onclick=()=>showMyWork(true);$("notificationBtn").onclick=()=>showMyWork(true);$("refreshMyWorkBtn").onclick=loadMyWork;
 
 /* ---------- 브라우저 뒤로가기 ---------- */
 async function renderHistoryState(state){const t=state||{screen:"auth"};if(t.screen!=="image")hideImageModalOnly();if(t.screen!=="log"&&t.screen!=="image")hideHistoryModalOnly();if(t.screen==="auth"){showAuth();return}if(t.admin){if(!await checkCurrentUserAdmin()){showAuth();replaceState({screen:"auth"});return}isAdmin=true;currentUserName="관리자"}showHeader();if(t.screen==="home"){showHome(false);return}if(t.screen==="mywork"){showMyWork(false);return}if(t.screen==="schedule-tab"){showScheduleTab(t.tab||"register");return}if(t.screen==="production-dashboard"){showProductionDashboard(false);return}if(t.screen==="board"){showBoard(false);return}if(t.screen==="bhd-tab"){showBhdTab(t.tab||"register");return}if(t.screen==="bhd-edit"){const r=await fetchRecordById(t.recordId);if(r)await loadForEdit(r,false);else showBhdTab("list");return}if(t.screen==="bhd-detail"){const r=await fetchRecordById(t.recordId);if(r)await renderRecordDetail(r,false);else showBhdTab("list");return}if(t.screen==="request-tab"){showRequestTab(t.tab||"register");return}if(t.screen==="request-detail"){const r=await fetchRequestById(t.recordId);if(r)await renderRequestDetail(r,false);else showRequestTab("list");return}if(t.screen==="log"){const r=await fetchRecordById(t.recordId);if(r)await openHistoryModal(r,Number(t.logIndex||0),false);return}if(t.screen==="image"){showImageModalOnly(t.url,t.filename||"HWDK-photo.jpg",!!t.mirror)}}
 addEventListener("popstate",e=>{updateAppBackButton();renderHistoryState(e.state)});
+
 /* ===== 조립공정 패치와 메인 모듈 연결 ===== */
-Object.defineProperties(window,{
-  supabase:{
-    get:()=>supabase,
-    configurable:true
-  },
+Object.defineProperties(window,{supabase:{get:()=>supabase,configurable:true},currentUserName:{get:()=>currentUserName,set:v=>{currentUserName=v},configurable:true},currentUserId:{get:()=>currentUserId,set:v=>{currentUserId=v},configurable:true},isAdmin:{get:()=>isAdmin,set:v=>{isAdmin=v},configurable:true},escapeHtml:{get:()=>escapeHtml,configurable:true},localToday:{get:()=>localToday,configurable:true},productionDateOnly:{get:()=>productionDateOnly,configurable:true},fetchAllRows:{get:()=>fetchAllRows,configurable:true},hideAllMain:{get:()=>hideAllMain,configurable:true},showHeader:{get:()=>showHeader,configurable:true},pushState:{get:()=>pushState,configurable:true},showScheduleTab:{get:()=>showScheduleTab,set:v=>{showScheduleTab=v},configurable:true},showBhdTab:{get:()=>showBhdTab,set:v=>{showBhdTab=v},configurable:true},showProductionDashboard:{get:()=>showProductionDashboard,set:v=>{showProductionDashboard=v},configurable:true}});
 
-  currentUserName:{
-    get:()=>currentUserName,
-    set:v=>{currentUserName=v},
-    configurable:true
-  },
-
-  currentUserId:{
-    get:()=>currentUserId,
-    set:v=>{currentUserId=v},
-    configurable:true
-  },
-
-  isAdmin:{
-    get:()=>isAdmin,
-    set:v=>{isAdmin=v},
-    configurable:true
-  },
-
-  escapeHtml:{
-    get:()=>escapeHtml,
-    configurable:true
-  },
-
-  localToday:{
-    get:()=>localToday,
-    configurable:true
-  },
-
-  productionDateOnly:{
-    get:()=>productionDateOnly,
-    configurable:true
-  },
-
-  fetchAllRows:{
-    get:()=>fetchAllRows,
-    configurable:true
-  },
-
-  hideAllMain:{
-    get:()=>hideAllMain,
-    configurable:true
-  },
-
-  showHeader:{
-    get:()=>showHeader,
-    configurable:true
-  },
-
-  pushState:{
-    get:()=>pushState,
-    configurable:true
-  },
-
-  showScheduleTab:{
-    get:()=>showScheduleTab,
-    set:v=>{showScheduleTab=v},
-    configurable:true
-  },
-
-  showBhdTab:{
-    get:()=>showBhdTab,
-    set:v=>{showBhdTab=v},
-    configurable:true
-  },
-
-  showProductionDashboard:{
-    get:()=>showProductionDashboard,
-    set:v=>{showProductionDashboard=v},
-    configurable:true
-  }
-});
 /* ---------- 초기 실행 ---------- */
 async function initialize(){replaceState({screen:"auth"});$("workDate").value=localToday();setRows([],1);showAuth();const {data}=await supabase.auth.getSession();const session=data.session;if(!session)return;currentUserId=session.user.id;if(await checkCurrentUserAdmin()){isAdmin=true;currentUserName="관리자";replaceState({screen:"home",admin:true});showHome(false);return}const name=await loadMyProfile(session.user.id);if(name){isAdmin=false;currentUserName=name;startNotificationPolling();replaceState({screen:"home",admin:false});showHome(false)}}
 initialize();
@@ -3402,181 +3310,20 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     asmResetForm();
   }
 
-  function asmQualityBadge(status) {
-    if (status === "합격") return '<span class="asm-badge pass">합격</span>';
-    if (status === "불합격") return '<span class="asm-badge fail">불합격</span>';
-    if (status === "대기") return '<span class="asm-badge pending">검사대기</span>';
-    return `<span class="asm-badge">${asmEsc(status || "-")}</span>`;
-  }
+  const ASM_QUALITY_ITEMS=[
+    {key:"drawing",label:"도면 누락·불일치 / 최신 REV 및 작업기준 확인"},{key:"member",label:"부재·보강재·브라켓 누락 / 종류·방향·위치 확인"},{key:"dimension",label:"취부·정렬·주요 치수 / GAP·단차·공차 확인"},{key:"weld_prep",label:"용접 전 준비 / 개선·루트갭·청결·가접 상태"},{key:"weld_visual",label:"용접 외관 / 균열·언더컷·오버랩·기공 등 육안 확인"},{key:"ndt",label:"비파괴검사(NDT) 대상 여부 및 검사결과 확인"},{key:"grinding",label:"사상·그라인딩 / 스패터·슬래그·날카로운 부위 마감"},{key:"deformation",label:"변형·직진도·평탄도 / 블록 형상 확인"},{key:"temporary",label:"임시 취부물·불필요 부착물 제거 및 제거부 보수"},{key:"handover",label:"최종 청소·표식·후속공정 인계 상태"}
+  ];
+  function asmQualityBadge(status){if(status==="합격")return '<span class="asm-badge pass">합격</span>';if(status==="불합격")return '<span class="asm-badge fail">불합격</span>';if(status==="대기")return '<span class="asm-badge pending">검사대기</span>';return `<span class="asm-badge">${asmEsc(status||"-")}</span>`}
+  function asmQualityChecklistEditor(r){return `<div class="quality-checklist" data-quality-id="${r.id}">${ASM_QUALITY_ITEMS.map(item=>`<div class="quality-check-row" data-key="${item.key}" data-label="${asmEsc(item.label)}"><div class="quality-check-name">${asmEsc(item.label)}</div><select class="quality-check-result"><option value="">결과 선택</option><option value="적합">적합</option><option value="부적합">부적합</option><option value="해당없음">해당없음</option></select><input class="quality-check-note" placeholder="특이사항 / 부적합 내용"></div>`).join("")}</div>`}
+  function asmQualityChecklistReadOnly(checklist){const items=Array.isArray(checklist?.items)?checklist.items:[];if(!items.length)return '<div class="hint">세부 검사항목 기록 없음</div>';return `<div class="quality-read-grid">${items.map(item=>{const result=String(item.result||"-");const cls=result==="적합"?"ok":result==="부적합"?"ng":result==="해당없음"?"na":"";return `<div class="quality-read-row ${cls}"><div class="quality-read-name">${asmEsc(item.label||item.key||"-")}</div><div class="quality-read-result">${asmEsc(result)}</div>${item.note?`<div class="quality-read-note">${asmEsc(item.note)}</div>`:""}</div>`}).join("")}</div>`}
+  function asmCollectQualityChecklist(id){const box=asmE(`asmQualityCard-${id}`),rows=[...(box?.querySelectorAll(".quality-check-row")||[])],items=rows.map(row=>({key:row.dataset.key||"",label:row.dataset.label||"",result:row.querySelector(".quality-check-result")?.value||"",note:(row.querySelector(".quality-check-note")?.value||"").trim()})),missing=items.find(x=>!x.result);if(missing)return {error:`검사결과를 선택하지 않은 항목이 있습니다: ${missing.label}`};const failed=items.filter(x=>x.result==="부적합"),failedNoNote=failed.find(x=>!x.note);if(failedNoNote)return {error:`부적합 항목의 사유를 입력하세요: ${failedNoNote.label}`};return {checklist:{version:1,inspected_at:new Date().toISOString(),inspector_id:currentUserId,inspector_name:currentUserName,items},failed}}
+  async function asmSetQuality(id,result){const card=asmE(`asmQualityCard-${id}`),note=(card?.querySelector(".quality-overall-note")?.value||"").trim(),collected=asmCollectQualityChecklist(id);if(collected.error){alert(collected.error);return}if(!note){alert("종합 판정 의견 / 합격·불합격 사유를 입력하세요.");card?.querySelector(".quality-overall-note")?.focus();return}if(result==="합격"&&collected.failed.length){alert("부적합 항목이 있어 합격 처리할 수 없습니다.");return}if(result==="불합격"&&!collected.failed.length){alert("불합격 처리하려면 1개 이상의 검사항목을 부적합으로 기록하세요.");return}if(!confirm(`${result} 처리하시겠습니까?
 
-  async function asmSetQuality(id, result) {
-    const noteEl = asmE(`asmQualityNote-${id}`);
-    const note = (noteEl?.value || "").trim();
-
-    if (result === "불합격" && !note) {
-      alert("불합격 사유를 입력하세요.");
-      noteEl?.focus();
-      return;
-    }
-
-    if (!confirm(`${result} 처리하시겠습니까?`)) return;
-
-    const {error} = await supabase
-      .from(ASM_TABLE)
-      .update({
-        quality_status: result,
-        quality_note: note,
-        quality_checked_at: new Date().toISOString(),
-        quality_checked_by: currentUserId,
-        quality_checked_name: currentUserName,
-        updated_at: new Date().toISOString()
-      })
-      .eq("id", id)
-      .eq("quality_status", "대기");
-
-    if (error) {
-      alert("품질판정 저장 실패: " + (error?.message || "오류"));
-      return;
-    }
-
-    await asmLoadQualityQueue();
-    asmLoadState();
-    asmLoadDashboard();
-  }
-
-  function asmRenderQuality(rows) {
-    const list = asmE("asmQualityList");
-    const status = asmE("asmQualityStatus");
-    if (!list) return;
-
-    const shipFilter = (asmE("asmQualityShip")?.value || "").trim().toLowerCase();
-    const blkFilter = (asmE("asmQualityBlk")?.value || "").trim().toLowerCase();
-    const filtered = rows.filter(r => {
-      if (shipFilter && !String(r.ship_no || "").toLowerCase().includes(shipFilter)) return false;
-      if (blkFilter && !String(r.blk_no || "").toLowerCase().includes(blkFilter)) return false;
-      return true;
-    });
-
-    const pending = filtered.filter(r => r.quality_status === "대기");
-    const history = filtered.filter(r => r.quality_status !== "대기").slice(0,50);
-    status.textContent = `검사대기 ${pending.length}건 · 최근 판정 ${history.length}건`;
-
-    const card = (r, actionable) => `
-      <div class="asm-quality-card ${r.quality_status === "대기" ? "pending" : ""}">
-        <div class="asm-log-head">
-          <div>
-            <div class="asm-log-title">${asmEsc(r.ship_no)} · BLK ${asmEsc(r.blk_no)} · ${asmEsc(r.process_step)} ${Number(r.attempt_no || 1)}차</div>
-            <div class="asm-log-meta">${asmEsc(asmDate(r.work_date))} · 작업자 ${asmEsc(r.author_name || "-")} · 투입 ${Number(r.manpower || 0)}명</div>
-          </div>
-          <div>${asmQualityBadge(r.quality_status)}</div>
-        </div>
-        <div class="asm-log-content">${asmEsc(r.work_content || "(작업내용 없음)")}</div>
-        ${r.quality_note ? `<div class="asm-log-meta">품질의견: ${asmEsc(r.quality_note)}</div>` : ""}
-        ${actionable ? `
-          <div class="asm-quality-actions">
-            <textarea id="asmQualityNote-${r.id}" placeholder="검사 의견 / 불합격 사유"></textarea>
-            <button type="button" class="success" data-asm-qid="${r.id}" data-asm-result="합격">합격</button>
-            <button type="button" class="danger" data-asm-qid="${r.id}" data-asm-result="불합격">불합격</button>
-          </div>` : `
-          <div class="asm-log-meta">검사자 ${asmEsc(r.quality_checked_name || "-")} · ${asmEsc(asmDate(r.quality_checked_at))}</div>`}
-      </div>`;
-
-    list.innerHTML = `
-      <h3>검사대기</h3>
-      <div class="asm-list">${pending.length ? pending.map(r => card(r,true)).join("") : '<div class="empty">검사대기 건이 없습니다.</div>'}</div>
-      <h3 style="margin-top:18px">최근 검사이력</h3>
-      <div class="asm-list">${history.length ? history.map(r => card(r,false)).join("") : '<div class="empty">검사이력이 없습니다.</div>'}</div>`;
-
-    list.querySelectorAll("[data-asm-qid]").forEach(btn => {
-      btn.onclick = () => asmSetQuality(Number(btn.dataset.asmQid), btn.dataset.asmResult);
-    });
-  }
-
-  async function asmLoadQualityQueue() {
-    const status = asmE("asmQualityStatus");
-    if (!status) return;
-    const seq = ++asmQualitySeq;
-    status.textContent = "조립 품질검사 목록 불러오는 중...";
-
-    const {data,error} = await supabase
-      .from(ASM_TABLE)
-      .select("*")
-      .eq("process_confirmed", true)
-      .in("quality_status", ["대기","합격","불합격"])
-      .order("created_at", {ascending:false})
-      .limit(300);
-
-    if (seq !== asmQualitySeq) return;
-    if (error) {
-      status.textContent = "품질검사 조회 실패: " + (error?.message || "오류");
-      return;
-    }
-    asmRenderQuality(data || []);
-  }
-
-  function asmBuildQualityUi() {
-    const app = asmE("bhdApp");
-    const tabs = app?.querySelector(".tabs");
-    if (!app || !tabs || asmE("assemblyQualitySection")) return;
-
-    const tab = document.createElement("button");
-    tab.id = "assemblyQualityTab";
-    tab.type = "button";
-    tab.textContent = "조립 품질검사";
-    tabs.appendChild(tab);
-
-    const section = document.createElement("section");
-    section.id = "assemblyQualitySection";
-    section.className = "hidden";
-    section.innerHTML = `
-      <div class="card">
-        <div class="section-heading">
-          <div>
-            <h2>조립공정 작업품질검사</h2>
-            <div class="hint">소조립·중조립·대조립 작업완료 확인 건을 검사합니다. 합격 시 다음 공정이 자동으로 열리고, 불합격 시 동일 공정 재작업 상태로 돌아갑니다.</div>
-          </div>
-          <button id="asmQualityRefresh" class="refresh" type="button">새로고침</button>
-        </div>
-        <div class="schedule-list-filters">
-          <div><label>호선</label><input id="asmQualityShip" placeholder="전체 또는 예: 2372"></div>
-          <div><label>BLK</label><input id="asmQualityBlk" placeholder="전체 또는 예: E11A"></div>
-          <button id="asmQualitySearch" class="primary" type="button" style="margin-top:0">조회</button>
-        </div>
-        <div id="asmQualityStatus" class="status"></div>
-        <div id="asmQualityList"></div>
-      </div>`;
-    tabs.insertAdjacentElement("afterend", section);
-
-    const baseShowBhdTab = showBhdTab;
-    showBhdTab = function(mode) {
-      if (mode === "assemblyQuality") {
-        hideAllMain();
-        showHeader();
-        asmE("bhdApp").classList.remove("hidden");
-
-        ["bhdRegisterTab","bhdSearchTab","bhdListTab"].forEach(id => asmE(id)?.classList.remove("active"));
-        ["bhdRegisterSection","bhdSearchSection","bhdListSection"].forEach(id => asmE(id)?.classList.add("hidden"));
-
-        asmE("assemblyQualityTab").classList.add("active");
-        asmE("assemblyQualitySection").classList.remove("hidden");
-        asmLoadQualityQueue();
-        return;
-      }
-
-      asmE("assemblyQualityTab")?.classList.remove("active");
-      asmE("assemblyQualitySection")?.classList.add("hidden");
-      return baseShowBhdTab(mode);
-    };
-
-    asmE("assemblyQualityTab").onclick = () => {
-      showBhdTab("assemblyQuality");
-      pushState({screen:"bhd-tab", tab:"assemblyQuality", admin:isAdmin});
-    };
-    asmE("asmQualityRefresh").onclick = asmLoadQualityQueue;
-    asmE("asmQualitySearch").onclick = asmLoadQualityQueue;
-    asmE("asmQualityShip").addEventListener("keydown", e => { if (e.key === "Enter") asmLoadQualityQueue(); });
-    asmE("asmQualityBlk").addEventListener("keydown", e => { if (e.key === "Enter") asmLoadQualityQueue(); });
-  }
+품질검사 결과가 원 작업등록자에게 알림으로 전달됩니다.`))return;const now=new Date().toISOString(),{error}=await supabase.from(ASM_TABLE).update({quality_status:result,quality_note:note,quality_checklist:collected.checklist,quality_checked_at:now,quality_checked_by:currentUserId,quality_checked_name:currentUserName,quality_result_read_at:null,quality_result_read_by:null,updated_at:now}).eq("id",id).eq("quality_status","대기");if(error){alert("품질판정 저장 실패: "+(error?.message||"오류"));return}alert(`${result} 판정을 저장했습니다.
+원 작업등록자에게 품질검사 결과 알림이 표시됩니다.`);await asmLoadQualityQueue();asmLoadState();asmLoadDashboard()}
+  function asmRenderQuality(rows){const list=asmE("asmQualityList"),status=asmE("asmQualityStatus");if(!list)return;const shipFilter=(asmE("asmQualityShip")?.value||"").trim().toLowerCase(),blkFilter=(asmE("asmQualityBlk")?.value||"").trim().toLowerCase(),filtered=rows.filter(r=>(!shipFilter||String(r.ship_no||"").toLowerCase().includes(shipFilter))&&(!blkFilter||String(r.blk_no||"").toLowerCase().includes(blkFilter))),pending=filtered.filter(r=>r.quality_status==="대기"),history=filtered.filter(r=>r.quality_status!=="대기").slice(0,100);status.textContent=`검사대기 ${pending.length}건 · 최근 판정 ${history.length}건`;const card=(r,actionable)=>`<div id="asmQualityCard-${r.id}" class="asm-quality-card ${r.quality_status==="대기"?"pending":""}"><div class="asm-log-head"><div><div class="asm-log-title">${asmEsc(r.ship_no)} · BLK ${asmEsc(r.blk_no)} · ${asmEsc(r.process_step)} ${Number(r.attempt_no||1)}차</div><div class="asm-log-meta">${asmEsc(asmDate(r.work_date))} · 작업자 ${asmEsc(r.author_name||"-")} · 투입 ${Number(r.manpower||0)}명${r.area?` · 구역 ${asmEsc(r.area)}`:""}</div></div><div>${asmQualityBadge(r.quality_status)}</div></div><div class="asm-log-content"><strong>작업내용</strong><br>${asmEsc(r.work_content||"(작업내용 없음)")}</div>${actionable?`<div style="margin-top:12px;font-weight:900;color:#16324f">검사항목</div>${asmQualityChecklistEditor(r)}<textarea class="quality-overall-note" placeholder="종합 판정 의견 / 합격·불합격 사유를 반드시 입력하세요."></textarea><div class="asm-quality-actions"><button type="button" class="success" data-asm-qid="${r.id}" data-asm-result="합격">합격 저장</button><button type="button" class="danger" data-asm-qid="${r.id}" data-asm-result="불합격">불합격 저장</button></div>`:`<div style="margin-top:12px;font-weight:900;color:#16324f">검사항목 기록</div>${asmQualityChecklistReadOnly(r.quality_checklist)}<div class="request-content-preview"><strong>종합 판정 의견</strong><br>${asmEsc(r.quality_note||"-")}</div><div class="asm-log-meta">검사자 ${asmEsc(r.quality_checked_name||"-")} · ${asmEsc(r.quality_checked_at?new Date(r.quality_checked_at).toLocaleString("ko-KR"):"-")}</div>`}</div>`;list.innerHTML=`<h3>검사대기</h3><div class="asm-list">${pending.length?pending.map(r=>card(r,true)).join(""):'<div class="empty">검사대기 건이 없습니다.</div>'}</div><h3 style="margin-top:18px">검사이력</h3><div class="asm-list">${history.length?history.map(r=>card(r,false)).join(""):'<div class="empty">검사이력이 없습니다.</div>'}</div>`;list.querySelectorAll("[data-asm-qid]").forEach(btn=>{btn.onclick=()=>asmSetQuality(Number(btn.dataset.asmQid),btn.dataset.asmResult)})}
+  async function asmLoadQualityQueue(){const status=asmE("asmQualityStatus");if(!status)return;const seq=++asmQualitySeq;status.textContent="조립 품질검사 목록 불러오는 중...";const {data,error}=await supabase.from(ASM_TABLE).select("*").eq("process_confirmed",true).in("quality_status",["대기","합격","불합격"]).order("created_at",{ascending:false}).limit(500);if(seq!==asmQualitySeq)return;if(error){status.textContent="품질검사 조회 실패: "+(error?.message||"오류");return}asmRenderQuality(data||[])}
+  function asmBuildQualityUi(){const app=asmE("bhdApp"),tabs=app?.querySelector(".tabs");if(!app||!tabs||asmE("assemblyQualitySection"))return;["bhdRegisterTab","bhdSearchTab","bhdListTab"].forEach(id=>asmE(id)?.classList.add("hidden"));["bhdRegisterSection","bhdSearchSection","bhdListSection"].forEach(id=>asmE(id)?.classList.add("hidden"));tabs.style.gridTemplateColumns="1fr";const tab=document.createElement("button");tab.id="assemblyQualityTab";tab.type="button";tab.className="active";tab.textContent="조립 품질검사";tabs.appendChild(tab);const section=document.createElement("section");section.id="assemblyQualitySection";section.className="hidden";section.innerHTML=`<div class="card"><div class="section-heading"><div><h2>조립공정 작업품질검사</h2><div class="hint">BLK별 작업완료 건을 검사합니다. 검사항목별 적합·부적합·해당없음을 기록하고 종합 판정을 저장합니다. 합격 시 다음 공정이 열리고, 불합격 시 동일 공정 재작업으로 전환됩니다. 판정 결과는 원 작업등록자의 나의 업무/알림에 전달됩니다.</div></div><button id="asmQualityRefresh" class="refresh" type="button">새로고침</button></div><div class="schedule-list-filters"><div><label>호선</label><input id="asmQualityShip" placeholder="전체 또는 예: 2372"></div><div><label>BLK</label><input id="asmQualityBlk" placeholder="전체 또는 예: E11A"></div><button id="asmQualitySearch" class="primary" type="button" style="margin-top:0">조회</button></div><div id="asmQualityStatus" class="status"></div><div id="asmQualityList"></div></div>`;tabs.insertAdjacentElement("afterend",section);const baseShowBhdTab=showBhdTab;showBhdTab=function(mode){if(mode==="assemblyQuality"){hideAllMain();showHeader();asmE("bhdApp").classList.remove("hidden");["bhdRegisterTab","bhdSearchTab","bhdListTab"].forEach(id=>asmE(id)?.classList.remove("active"));["bhdRegisterSection","bhdSearchSection","bhdListSection"].forEach(id=>asmE(id)?.classList.add("hidden"));asmE("assemblyQualityTab").classList.add("active");asmE("assemblyQualitySection").classList.remove("hidden");asmLoadQualityQueue();return}return showBhdTab("assemblyQuality")};asmE("assemblyQualityTab").onclick=()=>{showBhdTab("assemblyQuality");pushState({screen:"bhd-tab",tab:"assemblyQuality",admin:isAdmin})};asmE("asmQualityRefresh").onclick=asmLoadQualityQueue;asmE("asmQualitySearch").onclick=asmLoadQualityQueue;asmE("asmQualityShip").addEventListener("keydown",e=>{if(e.key==="Enter")asmLoadQualityQueue()});asmE("asmQualityBlk").addEventListener("keydown",e=>{if(e.key==="Enter")asmLoadQualityQueue()});const openBtn=asmE("openBhdBtn");if(openBtn)openBtn.onclick=()=>{showBhdTab("assemblyQuality");pushState({screen:"bhd-tab",tab:"assemblyQuality",admin:isAdmin})}}
 
   function asmDashboardStageHtml(s) {
     let cls = "";
