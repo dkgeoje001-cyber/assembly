@@ -2795,7 +2795,84 @@ $("refreshMyWorkBtn").onclick=loadMyWork;
 /* ---------- 브라우저 뒤로가기 ---------- */
 async function renderHistoryState(state){const t=state||{screen:"auth"};if(t.screen!=="image")hideImageModalOnly();if(t.screen!=="log"&&t.screen!=="image")hideHistoryModalOnly();if(t.screen==="auth"){showAuth();return}if(t.admin){if(!await checkCurrentUserAdmin()){showAuth();replaceState({screen:"auth"});return}isAdmin=true;currentUserName="관리자"}showHeader();if(t.screen==="home"){showHome(false);return}if(t.screen==="mywork"){showMyWork(false);return}if(t.screen==="schedule-tab"){showScheduleTab(t.tab||"register");return}if(t.screen==="production-dashboard"){showProductionDashboard(false);return}if(t.screen==="board"){showBoard(false);return}if(t.screen==="bhd-tab"){showBhdTab(t.tab||"register");return}if(t.screen==="bhd-edit"){const r=await fetchRecordById(t.recordId);if(r)await loadForEdit(r,false);else showBhdTab("list");return}if(t.screen==="bhd-detail"){const r=await fetchRecordById(t.recordId);if(r)await renderRecordDetail(r,false);else showBhdTab("list");return}if(t.screen==="request-tab"){showRequestTab(t.tab||"register");return}if(t.screen==="request-detail"){const r=await fetchRequestById(t.recordId);if(r)await renderRequestDetail(r,false);else showRequestTab("list");return}if(t.screen==="log"){const r=await fetchRecordById(t.recordId);if(r)await openHistoryModal(r,Number(t.logIndex||0),false);return}if(t.screen==="image"){showImageModalOnly(t.url,t.filename||"HWDK-photo.jpg",!!t.mirror)}}
 addEventListener("popstate",e=>{updateAppBackButton();renderHistoryState(e.state)});
+/* ===== 조립공정 패치와 메인 모듈 연결 ===== */
+Object.defineProperties(window,{
+  supabase:{
+    get:()=>supabase,
+    configurable:true
+  },
 
+  currentUserName:{
+    get:()=>currentUserName,
+    set:v=>{currentUserName=v},
+    configurable:true
+  },
+
+  currentUserId:{
+    get:()=>currentUserId,
+    set:v=>{currentUserId=v},
+    configurable:true
+  },
+
+  isAdmin:{
+    get:()=>isAdmin,
+    set:v=>{isAdmin=v},
+    configurable:true
+  },
+
+  escapeHtml:{
+    get:()=>escapeHtml,
+    configurable:true
+  },
+
+  localToday:{
+    get:()=>localToday,
+    configurable:true
+  },
+
+  productionDateOnly:{
+    get:()=>productionDateOnly,
+    configurable:true
+  },
+
+  fetchAllRows:{
+    get:()=>fetchAllRows,
+    configurable:true
+  },
+
+  hideAllMain:{
+    get:()=>hideAllMain,
+    configurable:true
+  },
+
+  showHeader:{
+    get:()=>showHeader,
+    configurable:true
+  },
+
+  pushState:{
+    get:()=>pushState,
+    configurable:true
+  },
+
+  showScheduleTab:{
+    get:()=>showScheduleTab,
+    set:v=>{showScheduleTab=v},
+    configurable:true
+  },
+
+  showBhdTab:{
+    get:()=>showBhdTab,
+    set:v=>{showBhdTab=v},
+    configurable:true
+  },
+
+  showProductionDashboard:{
+    get:()=>showProductionDashboard,
+    set:v=>{showProductionDashboard=v},
+    configurable:true
+  }
+});
 /* ---------- 초기 실행 ---------- */
 async function initialize(){replaceState({screen:"auth"});$("workDate").value=localToday();setRows([],1);showAuth();const {data}=await supabase.auth.getSession();const session=data.session;if(!session)return;currentUserId=session.user.id;if(await checkCurrentUserAdmin()){isAdmin=true;currentUserName="관리자";replaceState({screen:"home",admin:true});showHome(false);return}const name=await loadMyProfile(session.user.id);if(name){isAdmin=false;currentUserName=name;startNotificationPolling();replaceState({screen:"home",admin:false});showHome(false)}}
 initialize();
