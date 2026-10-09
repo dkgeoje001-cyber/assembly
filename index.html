@@ -4,9 +4,139 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>HWDK 조립공종</title>
+
+  <style>
+    body{
+      margin:0;
+      padding:30px 18px;
+      font-family:Arial,"Noto Sans KR",sans-serif;
+      background:#f4f6f8;
+      color:#222;
+    }
+
+    .box{
+      max-width:600px;
+      margin:auto;
+      background:#fff;
+      padding:24px;
+      border-radius:14px;
+      box-shadow:0 3px 12px rgba(0,0,0,.1);
+    }
+
+    h1{
+      margin-top:0;
+      color:#16324f;
+    }
+
+    #status{
+      margin-top:20px;
+      padding:16px;
+      border-radius:10px;
+      background:#eef2f5;
+      font-weight:700;
+      line-height:1.6;
+    }
+
+    .success{
+      background:#e1f3e8 !important;
+      color:#14623d;
+    }
+
+    .error{
+      background:#fde8e8 !important;
+      color:#9b2222;
+    }
+  </style>
 </head>
+
 <body>
-  <h1>HWDK 조립공종</h1>
-  <p>조립공종 작업관리 시스템 준비중입니다.</p>
+
+  <div class="box">
+
+    <h1>HWDK 조립공종</h1>
+
+    <p>
+      조립공종 전용 Supabase 연결 확인
+    </p>
+
+    <div id="status">
+      Supabase 연결 확인 중...
+    </div>
+
+  </div>
+
+
+<script>
+
+const SUPABASE_URL =
+  "https://rkudqmumanycqwlawacx.supabase.co";
+
+
+const SUPABASE_KEY =
+  "sb_publishable_I40fxhiLGCCxDnRiYvb8FQ_FYPrf0aM";
+
+
+async function testSupabaseConnection(){
+
+  const status =
+    document.getElementById("status");
+
+  try{
+
+    const response =
+      await fetch(
+        `${SUPABASE_URL}/rest/v1/`,
+        {
+          method:"GET",
+
+          headers:{
+            apikey:SUPABASE_KEY,
+            Authorization:`Bearer ${SUPABASE_KEY}`
+          }
+        }
+      );
+
+
+    if(!response.ok){
+
+      const text =
+        await response.text();
+
+      throw new Error(
+        `HTTP ${response.status} - ${text}`
+      );
+
+    }
+
+
+    status.className =
+      "success";
+
+    status.innerHTML = `
+      ✅ 조립공종 Supabase 연결 성공<br><br>
+      Project URL:<br>
+      ${SUPABASE_URL}
+    `;
+
+
+  }catch(error){
+
+    status.className =
+      "error";
+
+    status.innerHTML = `
+      ❌ Supabase 연결 실패<br><br>
+      ${error.message}
+    `;
+
+  }
+
+}
+
+
+testSupabaseConnection();
+
+</script>
+
 </body>
 </html>
