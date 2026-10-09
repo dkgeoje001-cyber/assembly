@@ -2800,5 +2800,897 @@ addEventListener("popstate",e=>{updateAppBackButton();renderHistoryState(e.state
 async function initialize(){replaceState({screen:"auth"});$("workDate").value=localToday();setRows([],1);showAuth();const {data}=await supabase.auth.getSession();const session=data.session;if(!session)return;currentUserId=session.user.id;if(await checkCurrentUserAdmin()){isAdmin=true;currentUserName="관리자";replaceState({screen:"home",admin:true});showHome(false);return}const name=await loadMyProfile(session.user.id);if(name){isAdmin=false;currentUserName=name;startNotificationPolling();replaceState({screen:"home",admin:false});showHome(false)}}
 initialize();
 </script>
+<!-- =========================================================
+HWDK 조립공정 BLK 순차관리 통합 패치
+적용 위치: 현재 HTML의 기존 스크립트가 모두 끝난 뒤, </body> 바로 위
+필수 선행: HWDK_조립공정_BLK_Supabase.sql 1회 실행
+========================================================= -->
+
+<style>
+.asm-tab{background:#eef5fb!important;color:#16324f!important}
+.asm-tab.active{background:#16324f!important;color:#fff!important}
+.asm-wrap{display:grid;gap:12px}
+.asm-form-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.asm-form-grid .wide{grid-column:span 2}
+.asm-flow{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:9px;margin:14px 0}
+.asm-step{border:1px solid #d8e0e7;border-radius:12px;background:#f8fafc;padding:12px}
+.asm-step.current{border-color:#16324f;box-shadow:0 0 0 2px rgba(22,50,79,.12);background:#fff}
+.asm-step.done{background:#eef9f3;border-color:#acd8bf}
+.asm-step.wait-qc{background:#fff8e7;border-color:#e7cc7a}
+.asm-step.fail{background:#fff0f0;border-color:#e2aaaa}
+.asm-step-name{font-size:15px;font-weight:900;color:#16324f}
+.asm-step-status{margin-top:5px;font-size:13px;font-weight:800}
+.asm-step-meta{margin-top:6px;font-size:12px;color:#5d6975;line-height:1.55}
+.asm-arrow{display:none}
+.asm-current-box{padding:12px;border-radius:10px;background:#eef5fb;color:#16324f;font-weight:800;line-height:1.55}
+.asm-current-box.warn{background:#fff8e7;color:#775b00}
+.asm-current-box.fail{background:#fff0f0;color:#a12b2b}
+.asm-check-row{display:flex;align-items:center;gap:8px;margin-top:12px;padding:11px;border:1px solid #d7e0e7;border-radius:9px;background:#fafcfd}
+.asm-check-row input{width:auto;margin:0}
+.asm-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.asm-list{display:grid;gap:8px;margin-top:12px}
+.asm-log{border:1px solid #dde4e9;border-radius:10px;padding:11px;background:#fff}
+.asm-log-head{display:flex;justify-content:space-between;gap:8px;align-items:flex-start}
+.asm-log-title{font-weight:900;color:#16324f}
+.asm-log-meta{font-size:12px;color:#697784;line-height:1.55;margin-top:5px}
+.asm-log-content{margin-top:7px;white-space:pre-wrap;line-height:1.55}
+.asm-badge{display:inline-flex;align-items:center;border-radius:999px;padding:4px 8px;font-size:11px;font-weight:900;background:#edf2f7;color:#334155}
+.asm-badge.pass{background:#e7f7ee;color:#167148}
+.asm-badge.pending{background:#fff0c9;color:#8a5700}
+.asm-badge.fail{background:#fde8e8;color:#a12b2b}
+.asm-quality-card{border:1px solid #dbe3e9;border-radius:12px;padding:12px;background:#fff}
+.asm-quality-card.pending{border-color:#d7b55c;background:#fffdf5}
+.asm-quality-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.asm-quality-actions textarea{grid-column:1/-1;min-height:74px}
+.asm-dashboard-wrap{margin-top:14px;border-top:2px solid #dbe4ea;padding-top:14px}
+.asm-dashboard-title{font-size:18px;font-weight:900;color:#16324f;margin-bottom:4px}
+.asm-dashboard-sub{font-size:12px;color:#667581;line-height:1.5;margin-bottom:10px}
+.asm-summary-grid{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-bottom:12px}
+.asm-summary{border:1px solid #dbe3e9;border-radius:10px;background:#fff;padding:10px}
+.asm-summary-label{font-size:11px;color:#687785;font-weight:800}
+.asm-summary-value{margin-top:4px;font-size:22px;font-weight:900;color:#16324f}
+.asm-ship{border:1px solid #d8e0e7;border-radius:12px;background:#fff;margin-top:10px;overflow:hidden}
+.asm-ship summary{cursor:pointer;padding:12px;font-weight:900;color:#16324f;background:#f8fafc}
+.asm-blk-row{display:grid;grid-template-columns:minmax(100px,.8fr) repeat(3,minmax(130px,1fr));gap:8px;padding:10px 12px;border-top:1px solid #edf1f4;align-items:stretch}
+.asm-blk-name{font-weight:900;color:#243b53}
+.asm-blk-sub{font-size:11px;color:#6b7785;margin-top:4px}
+.asm-dash-step{border:1px solid #e0e6eb;border-radius:8px;padding:8px;background:#fafcfd}
+.asm-dash-step strong{display:block;font-size:12px;color:#16324f}
+.asm-dash-step span{display:block;margin-top:4px;font-size:11px;line-height:1.45;color:#667581}
+.asm-dash-step.pass{background:#eef9f3;border-color:#b7dfc7}
+.asm-dash-step.pending{background:#fff8e7;border-color:#e7cc7a}
+.asm-dash-step.fail{background:#fff0f0;border-color:#e2aaaa}
+@media(max-width:900px){
+  .asm-form-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .asm-summary-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .asm-blk-row{grid-template-columns:1fr}
+}
+@media(max-width:600px){
+  .asm-form-grid{grid-template-columns:1fr}
+  .asm-form-grid .wide{grid-column:auto}
+  .asm-flow{grid-template-columns:1fr}
+  .asm-summary-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+</style>
+
+<script>
+(() => {
+  "use strict";
+
+  const ASM_TABLE = "assembly_workflow";
+  const ASM_STEPS = ["소조립","중조립","대조립"];
+  let asmCurrentRows = [];
+  let asmCurrentState = null;
+  let asmStateSeq = 0;
+  let asmQualitySeq = 0;
+  let asmDashboardSeq = 0;
+
+  const asmE = (id) => document.getElementById(id);
+  const asmEsc = (v) => {
+    if (typeof escapeHtml === "function") return escapeHtml(v);
+    return String(v ?? "").replace(/[&<>"']/g, s => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[s]));
+  };
+  const asmDate = (v) => {
+    if (!v) return "";
+    if (typeof productionDateOnly === "function") return productionDateOnly(v);
+    return String(v).slice(0,10);
+  };
+  const asmPct = (v) => `${Number(Number(v || 0).toFixed(1))}%`;
+  const asmToday = () => typeof localToday === "function"
+    ? localToday()
+    : new Date(Date.now() - new Date().getTimezoneOffset()*60000).toISOString().slice(0,10);
+
+  function asmRowsByStep(rows, step) {
+    return (rows || []).filter(r => r.process_step === step);
+  }
+
+  function asmStepState(rows, step) {
+    const all = asmRowsByStep(rows, step);
+    const passed = all.find(r => r.quality_status === "합격");
+    const hadFailure = all.some(r => r.quality_status === "불합격");
+
+    if (passed) {
+      return {
+        step, passed:true, hadFailure,
+        attempt:Number(passed.attempt_no || 1),
+        progress:100,
+        quality:"합격",
+        status:"완료",
+        row:passed,
+        hasRows:all.length>0
+      };
+    }
+
+    const maxAttempt = all.reduce((m,r) => Math.max(m, Number(r.attempt_no || 1)), 1);
+    const current = all.filter(r => Number(r.attempt_no || 1) === maxAttempt);
+    const progress = current.reduce((m,r) => Math.max(m, Number(r.progress_rate || 0)), 0);
+    const confirmed = current
+      .filter(r => r.process_confirmed)
+      .sort((a,b) => String(a.created_at || "").localeCompare(String(b.created_at || "")));
+    const latestConfirmed = confirmed[confirmed.length - 1] || null;
+    const quality = latestConfirmed?.quality_status || "미대상";
+
+    let status = "대기";
+    if (quality === "대기") status = "검사대기";
+    else if (quality === "불합격") status = "재작업";
+    else if (current.length && progress > 0) status = hadFailure ? "재작업중" : "작업중";
+
+    return {
+      step, passed:false, hadFailure,
+      attempt:maxAttempt,
+      progress,
+      quality,
+      status,
+      row:latestConfirmed || current[current.length - 1] || null,
+      hasRows:all.length>0
+    };
+  }
+
+  function asmBuildState(rows) {
+    const steps = Object.fromEntries(ASM_STEPS.map(step => [step, asmStepState(rows, step)]));
+    let currentStep = null;
+    for (const step of ASM_STEPS) {
+      if (!steps[step].passed) {
+        currentStep = step;
+        break;
+      }
+    }
+    const current = currentStep ? steps[currentStep] : null;
+    const blockedByQuality = !!current && current.quality === "대기";
+    const allPassed = !currentStep;
+    return {steps, currentStep, current, blockedByQuality, allPassed};
+  }
+
+  function asmStageClass(s) {
+    if (s.passed) return "done";
+    if (s.quality === "대기") return "wait-qc";
+    if (s.quality === "불합격") return "fail";
+    return "";
+  }
+
+  function asmStageBadge(s) {
+    if (s.passed) return '<span class="asm-badge pass">품질 합격</span>';
+    if (s.quality === "대기") return '<span class="asm-badge pending">품질검사 대기</span>';
+    if (s.quality === "불합격") return '<span class="asm-badge fail">불합격 · 재작업</span>';
+    if (s.progress > 0) return `<span class="asm-badge">${asmEsc(s.status)} ${asmPct(s.progress)}</span>`;
+    return '<span class="asm-badge">대기</span>';
+  }
+
+  function asmCurrentAttempt(s) {
+    if (!s) return 1;
+    return s.quality === "불합격" ? Number(s.attempt || 1) + 1 : Number(s.attempt || 1);
+  }
+
+  function asmRenderFlow() {
+    const flow = asmE("asmFlow");
+    const box = asmE("asmCurrentBox");
+    const saveBtn = asmE("asmSaveBtn");
+    const confirm = asmE("asmConfirm");
+    const progress = asmE("asmProgress");
+    if (!flow || !box) return;
+
+    const state = asmCurrentState || asmBuildState([]);
+    flow.innerHTML = ASM_STEPS.map(step => {
+      const s = state.steps[step];
+      const current = state.currentStep === step ? " current" : "";
+      return `<div class="asm-step ${asmStageClass(s)}${current}">
+        <div class="asm-step-name">${step}</div>
+        <div class="asm-step-status">${asmStageBadge(s)}</div>
+        <div class="asm-step-meta">
+          현재 공정률 ${asmPct(s.progress)}
+          ${s.hadFailure && !s.passed ? `<br>재작업 이력 있음` : ""}
+          ${s.hasRows ? `<br>최근 차수 ${s.attempt}차` : ""}
+        </div>
+      </div>`;
+    }).join("");
+
+    box.className = "asm-current-box";
+
+    if (state.allPassed) {
+      box.textContent = "이 BLK는 소조립 · 중조립 · 대조립 및 품질검사까지 모두 완료되었습니다.";
+      if (saveBtn) saveBtn.disabled = true;
+      if (confirm) confirm.disabled = true;
+      if (progress) progress.disabled = true;
+      return;
+    }
+
+    const s = state.current;
+    if (state.blockedByQuality) {
+      box.classList.add("warn");
+      box.textContent = `${state.currentStep} 작업완료 확인이 끝났습니다. 품질검사 합격 전에는 다음 공정으로 진행할 수 없습니다.`;
+      if (saveBtn) saveBtn.disabled = true;
+      if (confirm) confirm.disabled = true;
+      if (progress) progress.disabled = true;
+      return;
+    }
+
+    if (s.quality === "불합격") {
+      box.classList.add("fail");
+      box.textContent = `${state.currentStep} 품질검사 불합격입니다. ${asmCurrentAttempt(s)}차 재작업을 등록한 뒤 다시 100% 완료확인하여 재검사를 받아야 합니다.`;
+    } else {
+      box.textContent = `현재 등록 가능 공정: ${state.currentStep} · ${asmCurrentAttempt(s)}차 작업`;
+    }
+
+    if (saveBtn) saveBtn.disabled = false;
+    if (confirm) confirm.disabled = false;
+    if (progress) progress.disabled = false;
+  }
+
+  async function asmFetchBlockRows(shipNo, blkNo) {
+    if (!shipNo || !blkNo) return [];
+    const {data,error} = await supabase
+      .from(ASM_TABLE)
+      .select("*")
+      .eq("ship_no", shipNo.trim())
+      .eq("blk_no", blkNo.trim().toUpperCase())
+      .order("created_at", {ascending:true})
+      .order("id", {ascending:true});
+    if (error) throw error;
+    return data || [];
+  }
+
+  async function asmLoadState() {
+    const ship = (asmE("asmShipNo")?.value || "").trim();
+    const blk = (asmE("asmBlkNo")?.value || "").trim().toUpperCase();
+    const status = asmE("asmStatus");
+    const seq = ++asmStateSeq;
+
+    if (!ship || !blk) {
+      asmCurrentRows = [];
+      asmCurrentState = asmBuildState([]);
+      asmRenderFlow();
+      asmRenderRecent([]);
+      if (status) status.textContent = "";
+      return;
+    }
+
+    try {
+      if (status) status.textContent = "BLK 공정상태 확인 중...";
+      const rows = await asmFetchBlockRows(ship, blk);
+      if (seq !== asmStateSeq) return;
+      asmCurrentRows = rows;
+      asmCurrentState = asmBuildState(rows);
+      asmRenderFlow();
+      asmRenderRecent(rows);
+      if (status) status.textContent = rows.length ? `등록 이력 ${rows.length}건` : "신규 BLK입니다. 소조립부터 시작합니다.";
+    } catch (e) {
+      if (seq !== asmStateSeq) return;
+      if (status) status.textContent = "조립공정 조회 실패: " + (e?.message || "오류");
+    }
+  }
+
+  function asmRenderRecent(rows) {
+    const list = asmE("asmRecent");
+    if (!list) return;
+    if (!rows.length) {
+      list.innerHTML = '<div class="empty">이 BLK의 작업 이력이 없습니다.</div>';
+      return;
+    }
+    const latest = [...rows].sort((a,b) => String(b.created_at || "").localeCompare(String(a.created_at || ""))).slice(0,20);
+    list.innerHTML = latest.map(r => {
+      const badge = r.quality_status === "합격"
+        ? '<span class="asm-badge pass">합격</span>'
+        : r.quality_status === "불합격"
+          ? '<span class="asm-badge fail">불합격</span>'
+          : r.quality_status === "대기"
+            ? '<span class="asm-badge pending">검사대기</span>'
+            : `<span class="asm-badge">${r.process_confirmed ? "완료확인" : "작업등록"}</span>`;
+      return `<div class="asm-log">
+        <div class="asm-log-head">
+          <div class="asm-log-title">${asmEsc(r.process_step)} · ${Number(r.attempt_no || 1)}차 · ${asmPct(r.progress_rate)}</div>
+          <div>${badge}</div>
+        </div>
+        <div class="asm-log-meta">${asmEsc(asmDate(r.work_date))} · 투입 ${Number(r.manpower || 0)}명 · ${asmEsc(r.author_name || "-")}</div>
+        ${r.work_content ? `<div class="asm-log-content">${asmEsc(r.work_content)}</div>` : ""}
+        ${r.quality_note ? `<div class="asm-log-meta">품질의견: ${asmEsc(r.quality_note)}</div>` : ""}
+      </div>`;
+    }).join("");
+  }
+
+  function asmValidateSave() {
+    const shipType = (asmE("asmShipType")?.value || "").trim();
+    const shipNo = (asmE("asmShipNo")?.value || "").trim();
+    const blkNo = (asmE("asmBlkNo")?.value || "").trim().toUpperCase();
+    const workContent = (asmE("asmWorkContent")?.value || "").trim();
+    const manpower = Number(asmE("asmManpower")?.value || 0);
+    const progress = Number(asmE("asmProgress")?.value || 0);
+    const confirmed = !!asmE("asmConfirm")?.checked;
+
+    if (!shipType) return "선종을 선택하세요.";
+    if (!shipNo) return "호선을 입력하세요.";
+    if (!blkNo) return "BLK NO를 입력하세요.";
+    if (!workContent) return "오늘 작업내용을 입력하세요.";
+    if (!Number.isInteger(manpower) || manpower < 1) return "투입 인원은 1명 이상의 정수로 입력하세요.";
+    if (!Number.isFinite(progress) || progress < 0 || progress > 100) return "공정률은 0~100 사이로 입력하세요.";
+    if (confirmed && progress !== 100) return "공정 완료 확인은 공정률 100%일 때만 가능합니다.";
+
+    const s = asmCurrentState?.current;
+    if (s && s.quality !== "불합격" && progress < Number(s.progress || 0)) {
+      return `현재 누적 공정률 ${asmPct(s.progress)}보다 낮게 입력할 수 없습니다.`;
+    }
+    return "";
+  }
+
+  async function asmSave() {
+    const status = asmE("asmStatus");
+    const btn = asmE("asmSaveBtn");
+    const err = asmValidateSave();
+    if (err) {
+      status.textContent = err;
+      return;
+    }
+
+    const state = asmCurrentState || asmBuildState([]);
+    if (state.allPassed) {
+      status.textContent = "이미 모든 조립공정과 품질검사가 완료된 BLK입니다.";
+      return;
+    }
+    if (state.blockedByQuality) {
+      status.textContent = "품질검사 대기 중입니다. 검사 결과 등록 후 다음 작업을 진행하세요.";
+      return;
+    }
+
+    const processStep = state.currentStep;
+    const stepState = state.current;
+    const confirmed = asmE("asmConfirm").checked;
+    const payload = {
+      work_date: asmE("asmWorkDate").value || asmToday(),
+      ship_type: asmE("asmShipType").value.trim(),
+      ship_no: asmE("asmShipNo").value.trim(),
+      area: asmE("asmArea").value.trim(),
+      blk_no: asmE("asmBlkNo").value.trim().toUpperCase(),
+      process_step: processStep,
+      attempt_no: asmCurrentAttempt(stepState),
+      work_content: asmE("asmWorkContent").value.trim(),
+      manpower: Number(asmE("asmManpower").value),
+      progress_rate: Number(asmE("asmProgress").value),
+      process_confirmed: confirmed,
+      confirmed_at: confirmed ? new Date().toISOString() : null,
+      confirmed_by: confirmed ? currentUserId : null,
+      confirmed_name: confirmed ? currentUserName : "",
+      quality_status: confirmed ? "대기" : "미대상",
+      author_name: currentUserName,
+      created_by: currentUserId,
+      updated_at: new Date().toISOString()
+    };
+
+    try {
+      btn.disabled = true;
+      status.textContent = confirmed ? `${processStep} 완료확인 등록 중...` : `${processStep} 작업 등록 중...`;
+      const {error} = await supabase.from(ASM_TABLE).insert(payload);
+      if (error) throw error;
+
+      status.textContent = confirmed
+        ? `${processStep} 작업완료 확인 완료 · 품질검사 대기로 전환되었습니다.`
+        : `${processStep} 작업내용을 등록했습니다.`;
+
+      asmE("asmWorkContent").value = "";
+      asmE("asmConfirm").checked = false;
+      await asmLoadState();
+      asmE("asmProgress").value = asmCurrentState?.current?.progress || 0;
+      asmLoadQualityQueue();
+      asmLoadDashboard();
+    } catch (e) {
+      status.textContent = "등록 실패: " + (e?.message || "오류");
+    } finally {
+      if (!asmCurrentState?.blockedByQuality && !asmCurrentState?.allPassed) btn.disabled = false;
+    }
+  }
+
+  function asmResetForm() {
+    if (!asmE("asmWorkDate")) return;
+    asmE("asmWorkDate").value = asmToday();
+    asmE("asmAuthor").value = currentUserName || "";
+    asmE("asmWorkContent").value = "";
+    asmE("asmManpower").value = "1";
+    asmE("asmProgress").value = "0";
+    asmE("asmConfirm").checked = false;
+    asmCurrentRows = [];
+    asmCurrentState = asmBuildState([]);
+    asmRenderFlow();
+    asmRenderRecent([]);
+  }
+
+  function asmBuildScheduleUi() {
+    const app = asmE("scheduleApp");
+    const tabs = app?.querySelector(".tabs");
+    const registerSection = asmE("scheduleRegisterSection");
+    if (!app || !tabs || !registerSection || asmE("assemblyFlowSection")) return;
+
+    tabs.style.gridTemplateColumns = "repeat(3,1fr)";
+    const tab = document.createElement("button");
+    tab.id = "assemblyFlowTab";
+    tab.className = "asm-tab";
+    tab.type = "button";
+    tab.textContent = "조립공정";
+    tabs.insertBefore(tab, asmE("scheduleListTab"));
+
+    const section = document.createElement("section");
+    section.id = "assemblyFlowSection";
+    section.className = "hidden";
+    section.innerHTML = `
+      <div class="card asm-wrap">
+        <div class="section-heading">
+          <div>
+            <h2>조립공정 BLK 작업등록</h2>
+            <div class="hint">BLK별로 소조립 → 품질검사 → 중조립 → 품질검사 → 대조립 → 최종 품질검사 순서로 진행합니다. 이전 공정 품질검사가 합격되어야 다음 공정이 자동으로 열립니다.</div>
+          </div>
+          <button id="asmRefreshBtn" class="refresh" type="button">새로고침</button>
+        </div>
+
+        <div class="asm-form-grid">
+          <div><label>작업일</label><input id="asmWorkDate" type="date"></div>
+          <div><label>작성자</label><input id="asmAuthor" readonly></div>
+          <div>
+            <label>선종</label>
+            <select id="asmShipType">
+              <option value="">선종 선택</option>
+              <option value="LPG">LPG</option>
+              <option value="LNG">LNG</option>
+              <option value="VLCC">VLCC</option>
+              <option value="CONT">CONT</option>
+              <option value="ETC">기타</option>
+            </select>
+          </div>
+          <div><label>호선</label><input id="asmShipNo" placeholder="예: 2372"></div>
+          <div><label>BLK NO</label><input id="asmBlkNo" placeholder="예: E11A"></div>
+          <div><label>조립장 / 구역</label><input id="asmArea" placeholder="선택 입력"></div>
+          <div><label>오늘 투입 인원</label><input id="asmManpower" type="number" min="1" step="1" value="1"></div>
+          <div><label>현재 공정률</label><input id="asmProgress" type="number" min="0" max="100" step="1" value="0"></div>
+          <div class="wide"><label>오늘 작업내용</label><textarea id="asmWorkContent" placeholder="예: FB 취부 및 용접 / 보강재 취부 / 변형교정 등"></textarea></div>
+        </div>
+
+        <div id="asmCurrentBox" class="asm-current-box">호선과 BLK NO를 입력하면 현재 진행 가능한 공정을 확인합니다.</div>
+        <div id="asmFlow" class="asm-flow"></div>
+
+        <label class="asm-check-row">
+          <input id="asmConfirm" type="checkbox">
+          <span><strong>공정 완료 확인</strong><br><span class="hint">공정률 100%일 때만 체크할 수 있으며, 체크하여 등록하면 즉시 품질검사 대기로 전환됩니다.</span></span>
+        </label>
+
+        <div class="asm-actions">
+          <button id="asmSaveBtn" class="primary" type="button" style="margin-top:0">조립작업 등록</button>
+        </div>
+        <div id="asmStatus" class="status"></div>
+
+        <div style="margin-top:8px">
+          <h3>해당 BLK 작업 이력</h3>
+          <div id="asmRecent" class="asm-list"></div>
+        </div>
+      </div>`;
+    registerSection.insertAdjacentElement("afterend", section);
+
+    asmE("assemblyFlowTab").onclick = () => showScheduleTab("assembly");
+    asmE("asmRefreshBtn").onclick = asmLoadState;
+    asmE("asmSaveBtn").onclick = asmSave;
+    asmE("asmShipNo").addEventListener("change", asmLoadState);
+    asmE("asmBlkNo").addEventListener("change", asmLoadState);
+    asmE("asmBlkNo").addEventListener("input", e => { e.target.value = e.target.value.toUpperCase(); });
+    asmE("asmProgress").addEventListener("input", () => {
+      if (Number(asmE("asmProgress").value) !== 100) asmE("asmConfirm").checked = false;
+    });
+    asmE("asmConfirm").addEventListener("change", () => {
+      if (asmE("asmConfirm").checked && Number(asmE("asmProgress").value) !== 100) {
+        asmE("asmConfirm").checked = false;
+        asmE("asmStatus").textContent = "공정 완료 확인은 공정률 100%일 때만 가능합니다.";
+      }
+    });
+
+    const baseShowScheduleTab = showScheduleTab;
+    showScheduleTab = function(mode) {
+      if (mode === "assembly") {
+        hideAllMain();
+        showHeader();
+        asmE("scheduleApp").classList.remove("hidden");
+
+        asmE("scheduleRegisterTab").classList.remove("active");
+        asmE("scheduleListTab").classList.remove("active");
+        asmE("assemblyFlowTab").classList.add("active");
+
+        asmE("scheduleRegisterSection").classList.add("hidden");
+        asmE("scheduleListSection").classList.add("hidden");
+        asmE("assemblyFlowSection").classList.remove("hidden");
+
+        asmResetForm();
+        asmLoadState();
+        pushState({screen:"schedule-tab", tab:"assembly", admin:isAdmin});
+        return;
+      }
+
+      asmE("assemblyFlowTab")?.classList.remove("active");
+      asmE("assemblyFlowSection")?.classList.add("hidden");
+      return baseShowScheduleTab(mode);
+    };
+
+    asmResetForm();
+  }
+
+  function asmQualityBadge(status) {
+    if (status === "합격") return '<span class="asm-badge pass">합격</span>';
+    if (status === "불합격") return '<span class="asm-badge fail">불합격</span>';
+    if (status === "대기") return '<span class="asm-badge pending">검사대기</span>';
+    return `<span class="asm-badge">${asmEsc(status || "-")}</span>`;
+  }
+
+  async function asmSetQuality(id, result) {
+    const noteEl = asmE(`asmQualityNote-${id}`);
+    const note = (noteEl?.value || "").trim();
+
+    if (result === "불합격" && !note) {
+      alert("불합격 사유를 입력하세요.");
+      noteEl?.focus();
+      return;
+    }
+
+    if (!confirm(`${result} 처리하시겠습니까?`)) return;
+
+    const {error} = await supabase
+      .from(ASM_TABLE)
+      .update({
+        quality_status: result,
+        quality_note: note,
+        quality_checked_at: new Date().toISOString(),
+        quality_checked_by: currentUserId,
+        quality_checked_name: currentUserName,
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", id)
+      .eq("quality_status", "대기");
+
+    if (error) {
+      alert("품질판정 저장 실패: " + (error?.message || "오류"));
+      return;
+    }
+
+    await asmLoadQualityQueue();
+    asmLoadState();
+    asmLoadDashboard();
+  }
+
+  function asmRenderQuality(rows) {
+    const list = asmE("asmQualityList");
+    const status = asmE("asmQualityStatus");
+    if (!list) return;
+
+    const shipFilter = (asmE("asmQualityShip")?.value || "").trim().toLowerCase();
+    const blkFilter = (asmE("asmQualityBlk")?.value || "").trim().toLowerCase();
+    const filtered = rows.filter(r => {
+      if (shipFilter && !String(r.ship_no || "").toLowerCase().includes(shipFilter)) return false;
+      if (blkFilter && !String(r.blk_no || "").toLowerCase().includes(blkFilter)) return false;
+      return true;
+    });
+
+    const pending = filtered.filter(r => r.quality_status === "대기");
+    const history = filtered.filter(r => r.quality_status !== "대기").slice(0,50);
+    status.textContent = `검사대기 ${pending.length}건 · 최근 판정 ${history.length}건`;
+
+    const card = (r, actionable) => `
+      <div class="asm-quality-card ${r.quality_status === "대기" ? "pending" : ""}">
+        <div class="asm-log-head">
+          <div>
+            <div class="asm-log-title">${asmEsc(r.ship_no)} · BLK ${asmEsc(r.blk_no)} · ${asmEsc(r.process_step)} ${Number(r.attempt_no || 1)}차</div>
+            <div class="asm-log-meta">${asmEsc(asmDate(r.work_date))} · 작업자 ${asmEsc(r.author_name || "-")} · 투입 ${Number(r.manpower || 0)}명</div>
+          </div>
+          <div>${asmQualityBadge(r.quality_status)}</div>
+        </div>
+        <div class="asm-log-content">${asmEsc(r.work_content || "(작업내용 없음)")}</div>
+        ${r.quality_note ? `<div class="asm-log-meta">품질의견: ${asmEsc(r.quality_note)}</div>` : ""}
+        ${actionable ? `
+          <div class="asm-quality-actions">
+            <textarea id="asmQualityNote-${r.id}" placeholder="검사 의견 / 불합격 사유"></textarea>
+            <button type="button" class="success" data-asm-qid="${r.id}" data-asm-result="합격">합격</button>
+            <button type="button" class="danger" data-asm-qid="${r.id}" data-asm-result="불합격">불합격</button>
+          </div>` : `
+          <div class="asm-log-meta">검사자 ${asmEsc(r.quality_checked_name || "-")} · ${asmEsc(asmDate(r.quality_checked_at))}</div>`}
+      </div>`;
+
+    list.innerHTML = `
+      <h3>검사대기</h3>
+      <div class="asm-list">${pending.length ? pending.map(r => card(r,true)).join("") : '<div class="empty">검사대기 건이 없습니다.</div>'}</div>
+      <h3 style="margin-top:18px">최근 검사이력</h3>
+      <div class="asm-list">${history.length ? history.map(r => card(r,false)).join("") : '<div class="empty">검사이력이 없습니다.</div>'}</div>`;
+
+    list.querySelectorAll("[data-asm-qid]").forEach(btn => {
+      btn.onclick = () => asmSetQuality(Number(btn.dataset.asmQid), btn.dataset.asmResult);
+    });
+  }
+
+  async function asmLoadQualityQueue() {
+    const status = asmE("asmQualityStatus");
+    if (!status) return;
+    const seq = ++asmQualitySeq;
+    status.textContent = "조립 품질검사 목록 불러오는 중...";
+
+    const {data,error} = await supabase
+      .from(ASM_TABLE)
+      .select("*")
+      .eq("process_confirmed", true)
+      .in("quality_status", ["대기","합격","불합격"])
+      .order("created_at", {ascending:false})
+      .limit(300);
+
+    if (seq !== asmQualitySeq) return;
+    if (error) {
+      status.textContent = "품질검사 조회 실패: " + (error?.message || "오류");
+      return;
+    }
+    asmRenderQuality(data || []);
+  }
+
+  function asmBuildQualityUi() {
+    const app = asmE("bhdApp");
+    const tabs = app?.querySelector(".tabs");
+    if (!app || !tabs || asmE("assemblyQualitySection")) return;
+
+    const tab = document.createElement("button");
+    tab.id = "assemblyQualityTab";
+    tab.type = "button";
+    tab.textContent = "조립 품질검사";
+    tabs.appendChild(tab);
+
+    const section = document.createElement("section");
+    section.id = "assemblyQualitySection";
+    section.className = "hidden";
+    section.innerHTML = `
+      <div class="card">
+        <div class="section-heading">
+          <div>
+            <h2>조립공정 작업품질검사</h2>
+            <div class="hint">소조립·중조립·대조립 작업완료 확인 건을 검사합니다. 합격 시 다음 공정이 자동으로 열리고, 불합격 시 동일 공정 재작업 상태로 돌아갑니다.</div>
+          </div>
+          <button id="asmQualityRefresh" class="refresh" type="button">새로고침</button>
+        </div>
+        <div class="schedule-list-filters">
+          <div><label>호선</label><input id="asmQualityShip" placeholder="전체 또는 예: 2372"></div>
+          <div><label>BLK</label><input id="asmQualityBlk" placeholder="전체 또는 예: E11A"></div>
+          <button id="asmQualitySearch" class="primary" type="button" style="margin-top:0">조회</button>
+        </div>
+        <div id="asmQualityStatus" class="status"></div>
+        <div id="asmQualityList"></div>
+      </div>`;
+    tabs.insertAdjacentElement("afterend", section);
+
+    const baseShowBhdTab = showBhdTab;
+    showBhdTab = function(mode) {
+      if (mode === "assemblyQuality") {
+        hideAllMain();
+        showHeader();
+        asmE("bhdApp").classList.remove("hidden");
+
+        ["bhdRegisterTab","bhdSearchTab","bhdListTab"].forEach(id => asmE(id)?.classList.remove("active"));
+        ["bhdRegisterSection","bhdSearchSection","bhdListSection"].forEach(id => asmE(id)?.classList.add("hidden"));
+
+        asmE("assemblyQualityTab").classList.add("active");
+        asmE("assemblyQualitySection").classList.remove("hidden");
+        asmLoadQualityQueue();
+        return;
+      }
+
+      asmE("assemblyQualityTab")?.classList.remove("active");
+      asmE("assemblyQualitySection")?.classList.add("hidden");
+      return baseShowBhdTab(mode);
+    };
+
+    asmE("assemblyQualityTab").onclick = () => {
+      showBhdTab("assemblyQuality");
+      pushState({screen:"bhd-tab", tab:"assemblyQuality", admin:isAdmin});
+    };
+    asmE("asmQualityRefresh").onclick = asmLoadQualityQueue;
+    asmE("asmQualitySearch").onclick = asmLoadQualityQueue;
+    asmE("asmQualityShip").addEventListener("keydown", e => { if (e.key === "Enter") asmLoadQualityQueue(); });
+    asmE("asmQualityBlk").addEventListener("keydown", e => { if (e.key === "Enter") asmLoadQualityQueue(); });
+  }
+
+  function asmDashboardStageHtml(s) {
+    let cls = "";
+    let text = `${asmPct(s.progress)} · ${s.status}`;
+    if (s.passed) cls = "pass";
+    else if (s.quality === "대기") cls = "pending";
+    else if (s.quality === "불합격") cls = "fail";
+    if (s.hadFailure && !s.passed && s.quality !== "불합격") text += " · 재작업";
+    return `<div class="asm-dash-step ${cls}">
+      <strong>${asmEsc(s.step)}</strong>
+      <span>${asmEsc(text)}</span>
+    </div>`;
+  }
+
+  function asmRenderDashboard(rows) {
+    const summary = asmE("asmDashboardSummary");
+    const content = asmE("asmDashboardContent");
+    const status = asmE("asmDashboardStatus");
+    if (!summary || !content) return;
+
+    const map = new Map();
+    rows.forEach(r => {
+      const key = `${String(r.ship_no || "").trim()}|||${String(r.blk_no || "").trim().toUpperCase()}`;
+      if (!map.has(key)) map.set(key, {
+        ship_type:r.ship_type || "",
+        ship_no:r.ship_no || "",
+        blk_no:r.blk_no || "",
+        area:r.area || "",
+        rows:[]
+      });
+      map.get(key).rows.push(r);
+    });
+
+    const blocks = [...map.values()].map(b => ({...b,state:asmBuildState(b.rows)}));
+    const completed = blocks.filter(b => b.state.allPassed).length;
+    const qcWaiting = blocks.filter(b => Object.values(b.state.steps).some(s => s.quality === "대기")).length;
+    const failed = blocks.filter(b => Object.values(b.state.steps).some(s => s.quality === "불합격")).length;
+    const smallDone = blocks.filter(b => b.state.steps["소조립"].passed).length;
+    const midDone = blocks.filter(b => b.state.steps["중조립"].passed).length;
+    const largeDone = blocks.filter(b => b.state.steps["대조립"].passed).length;
+
+    const totalProgress = blocks.length
+      ? blocks.reduce((sum,b) => sum + ASM_STEPS.reduce((x,step) => x + Number(b.state.steps[step].progress || 0),0),0) / (blocks.length * ASM_STEPS.length)
+      : 0;
+
+    summary.innerHTML = `
+      <div class="asm-summary"><div class="asm-summary-label">전체 BLK</div><div class="asm-summary-value">${blocks.length}</div></div>
+      <div class="asm-summary"><div class="asm-summary-label">소조립 합격</div><div class="asm-summary-value">${smallDone}</div></div>
+      <div class="asm-summary"><div class="asm-summary-label">중조립 합격</div><div class="asm-summary-value">${midDone}</div></div>
+      <div class="asm-summary"><div class="asm-summary-label">대조립 최종완료</div><div class="asm-summary-value">${completed}</div></div>
+      <div class="asm-summary"><div class="asm-summary-label">품질검사 대기</div><div class="asm-summary-value">${qcWaiting}</div></div>
+      <div class="asm-summary"><div class="asm-summary-label">재작업 필요</div><div class="asm-summary-value">${failed}</div></div>`;
+
+    status.textContent = blocks.length
+      ? `조립공정 평균 진행률 ${asmPct(totalProgress)} · BLK ${blocks.length}건`
+      : "등록된 조립공정 BLK가 없습니다.";
+
+    if (!blocks.length) {
+      content.innerHTML = '<div class="empty">조립공정 작업등록 후 BLK별 현황이 표시됩니다.</div>';
+      return;
+    }
+
+    const ships = new Map();
+    blocks.forEach(b => {
+      const key = String(b.ship_no || "").trim();
+      if (!ships.has(key)) ships.set(key, {ship_no:b.ship_no,ship_type:b.ship_type,blocks:[]});
+      ships.get(key).blocks.push(b);
+    });
+
+    content.innerHTML = [...ships.values()].map(ship => `
+      <details class="asm-ship" open>
+        <summary>${asmEsc([ship.ship_type, ship.ship_no].filter(Boolean).join(" "))} 호선 · BLK ${ship.blocks.length}건</summary>
+        ${ship.blocks
+          .sort((a,b) => String(a.blk_no).localeCompare(String(b.blk_no), "ko", {numeric:true}))
+          .map(b => `
+            <div class="asm-blk-row">
+              <div>
+                <div class="asm-blk-name">BLK ${asmEsc(b.blk_no)}</div>
+                <div class="asm-blk-sub">${asmEsc(b.area || "")}${b.state.allPassed ? " · 최종완료" : ` · 현재 ${asmEsc(b.state.currentStep || "-")}`}</div>
+              </div>
+              ${ASM_STEPS.map(step => asmDashboardStageHtml(b.state.steps[step])).join("")}
+            </div>`).join("")}
+      </details>`).join("");
+  }
+
+  async function asmLoadDashboard() {
+    const wrap = asmE("asmDashboardWrap");
+    if (!wrap || wrap.closest(".hidden")) return;
+    const seq = ++asmDashboardSeq;
+    const status = asmE("asmDashboardStatus");
+    const shipFilter = (asmE("productionDashboardShip")?.value || "").trim();
+
+    status.textContent = "조립공정 BLK 지표 집계 중...";
+
+    let q = supabase.from(ASM_TABLE).select("*").order("ship_no",{ascending:true}).order("blk_no",{ascending:true}).order("created_at",{ascending:true});
+    if (shipFilter) q = q.ilike("ship_no", `%${shipFilter}%`);
+
+    let data = [];
+    let error = null;
+    if (typeof fetchAllRows === "function") {
+      const result = await fetchAllRows(() => {
+        let x = supabase.from(ASM_TABLE).select("*").order("ship_no",{ascending:true}).order("blk_no",{ascending:true}).order("created_at",{ascending:true});
+        if (shipFilter) x = x.ilike("ship_no", `%${shipFilter}%`);
+        return x;
+      });
+      data = result.data || [];
+      error = result.error;
+    } else {
+      const result = await q.limit(1000);
+      data = result.data || [];
+      error = result.error;
+    }
+
+    if (seq !== asmDashboardSeq) return;
+    if (error) {
+      status.textContent = "조립공정 지표 조회 실패: " + (error?.message || "오류");
+      return;
+    }
+    asmRenderDashboard(data);
+  }
+
+  function asmBuildDashboardUi() {
+    const app = asmE("productionDashboardApp");
+    const summary = asmE("productionDashboardSummary");
+    const status = asmE("productionDashboardStatus");
+    if (!app || !summary || !status || asmE("asmDashboardWrap")) return;
+
+    const wrap = document.createElement("div");
+    wrap.id = "asmDashboardWrap";
+    wrap.className = "asm-dashboard-wrap";
+    wrap.innerHTML = `
+      <div class="asm-dashboard-title">조립공정 BLK 통합현황</div>
+      <div class="asm-dashboard-sub">소조립 → 품질검사 → 중조립 → 품질검사 → 대조립 → 최종 품질검사의 순차 상태를 BLK별로 표시합니다. 품질 합격 전에는 다음 공정이 집계상 대기로 유지됩니다.</div>
+      <div id="asmDashboardSummary" class="asm-summary-grid"></div>
+      <div id="asmDashboardStatus" class="status"></div>
+      <div id="asmDashboardContent"></div>`;
+    summary.insertAdjacentElement("afterend", wrap);
+
+    const baseShowProductionDashboard = showProductionDashboard;
+    showProductionDashboard = function(push=true) {
+      const result = baseShowProductionDashboard(push);
+      setTimeout(asmLoadDashboard, 0);
+      return result;
+    };
+
+    asmE("refreshProductionDashboardBtn")?.addEventListener("click", asmLoadDashboard);
+    asmE("productionDashboardSearchBtn")?.addEventListener("click", asmLoadDashboard);
+    asmE("productionDashboardShip")?.addEventListener("keydown", e => {
+      if (e.key === "Enter") asmLoadDashboard();
+    });
+  }
+
+  function asmRenameQualityMenu() {
+    const btn = asmE("openBhdBtn");
+    if (!btn) return;
+    const name = btn.querySelector(".module-name");
+    const sub = btn.querySelector(".module-sub");
+    if (name) name.textContent = "작업품질검사";
+    if (sub) sub.textContent = "용접 후 품질 · 조립공정 검사 · 결과관리";
+  }
+
+  function asmUpdateHomeSubtitles() {
+    const scheduleBtn = asmE("openScheduleBtn");
+    const dashboardBtn = asmE("openProductionDashboardBtn");
+    if (scheduleBtn?.querySelector(".module-sub")) {
+      scheduleBtn.querySelector(".module-sub").textContent = "일반작업 · BLK 조립공정 · 공정확인";
+    }
+    if (dashboardBtn?.querySelector(".module-sub")) {
+      dashboardBtn.querySelector(".module-sub").textContent = "호선 · STAGE · BLK 조립공정 · 품질상태";
+    }
+  }
+
+  function asmInit() {
+    try {
+      asmRenameQualityMenu();
+      asmUpdateHomeSubtitles();
+      asmBuildScheduleUi();
+      asmBuildQualityUi();
+      asmBuildDashboardUi();
+    } catch (e) {
+      console.error("[HWDK 조립공정 패치 초기화 오류]", e);
+    }
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", asmInit, {once:true});
+  } else {
+    asmInit();
+  }
+})();
+</script>
+
 </body>
 </html>
