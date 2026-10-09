@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>HWDK 작업관리 시스템</title>
+<title>HWDK 조립공종</title>
 <style>
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}*{box-sizing:border-box}body{margin:0;font-family:Arial,"Noto Sans KR",sans-serif;background:#f4f6f8;color:#222;overflow-x:hidden}.hidden{display:none!important}header{background:#16324f;color:#fff;padding:12px 14px}.header-inner{max-width:1100px;margin:auto;display:flex;justify-content:space-between;align-items:center;gap:10px}.header-left{display:flex;align-items:center;gap:8px;min-width:0}.header-title{font-size:19px;font-weight:800;min-width:0}.app-back-btn{flex:0 0 auto;background:#244b70;color:#fff;border:1px solid rgba(255,255,255,.22);padding:8px 10px;font-size:12px;white-space:nowrap}.header-right{display:flex;align-items:center;gap:7px;flex-wrap:wrap}.user-badge{background:#e8edf2;color:#16324f;padding:6px 9px;border-radius:20px;font-size:12px;font-weight:800}.user-badge.admin{background:#dcefe5;color:#145c39}.header-btn{background:#fff;color:#16324f;padding:8px 10px;font-size:12px}.container{max-width:1100px;margin:auto;padding:14px}.card{background:#fff;border-radius:12px;padding:17px;margin-bottom:15px;box-shadow:0 2px 8px rgba(0,0,0,.08)}h2,h3{margin-top:0}label{display:block;margin-top:12px;margin-bottom:5px;font-weight:700}input,textarea,select{width:100%;padding:11px;border:1px solid #ccd2d8;border-radius:7px;font-size:16px;font-family:inherit;background:#fff}textarea{min-height:130px;resize:vertical}input[readonly],textarea[readonly]{background:#f3f5f7;color:#555}button{border:0;border-radius:8px;padding:12px 14px;font-size:15px;font-weight:700;cursor:pointer}button:disabled{opacity:.55;cursor:not-allowed}.primary{width:100%;margin-top:15px;background:#16324f;color:#fff}.secondary{background:#e8edf2;color:#222}.warning{background:#fff0b8;color:#533d00}.danger{background:#d64545;color:#fff}.success{background:#167148;color:#fff}.ai{width:100%;margin-top:12px;background:#265f91;color:#fff}.status{margin-top:10px;line-height:1.5;font-weight:700}.hint{color:#666;font-size:13px;line-height:1.5;margin-top:6px}.summary{margin-top:12px;padding:11px;background:#eef5fb;border:1px solid #cbddea;border-radius:8px;line-height:1.6}.auth-wrap,.home-wrap{min-height:82vh;display:flex;align-items:center;justify-content:center;padding:25px 14px}.auth-card,.home-card{width:100%;max-width:470px;background:#fff;border-radius:16px;padding:28px 22px;box-shadow:0 4px 18px rgba(0,0,0,.1)}.auth-title,.home-title{font-size:25px;font-weight:900;color:#16324f;text-align:center;margin-bottom:8px}.auth-subtitle,.home-subtitle{text-align:center;color:#666;font-size:14px;margin-bottom:22px}.auth-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:15px}.auth-actions button{width:100%}.admin-entry{display:block;margin:14px auto 0;background:transparent;color:#777;font-size:13px;text-decoration:underline}.admin-box{margin-top:18px;padding-top:16px;border-top:1px solid #e2e5e8}.dashboard-stack{display:flex;flex-direction:column;gap:16px;margin-top:20px}.dashboard-section{background:#f8fafb;border:1px solid #dfe5ea;border-radius:14px;padding:14px}.dashboard-section-title{font-size:17px;font-weight:900;color:#16324f;margin-bottom:10px;display:flex;align-items:center;gap:8px}.dashboard-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.module-btn{width:100%;min-height:96px;padding:16px 12px;font-size:16px;position:relative;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;text-align:left}.module-number{font-size:12px;opacity:.75}.module-name{font-size:17px;font-weight:900;line-height:1.35}.module-sub{font-size:12px;opacity:.82;margin-top:4px}.module-bhd{background:#16324f;color:#fff}.module-request{background:#276a5a;color:#fff}.module-schedule{background:#315f8c;color:#fff}.module-mywork{background:#7a4b16;color:#fff;min-height:86px}.module-dev{background:#e6e9ec;color:#7a8188}.mywork-wide{width:100%;position:relative}.tile-count{position:absolute;right:10px;top:10px;min-width:24px;height:24px;padding:0 7px;border-radius:999px;background:#d64545;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px}.notification-btn{position:relative;background:#fff!important;color:#16324f!important;width:38px;height:36px;padding:0!important;font-size:20px!important;display:flex;align-items:center;justify-content:center}.notification-count{position:absolute;right:-5px;top:-6px;min-width:19px;height:19px;padding:0 5px;border-radius:999px;background:#d64545;color:#fff;font-size:11px;display:flex;align-items:center;justify-content:center;border:2px solid #16324f}.mywork-unread{background:#fff8ed;border:2px solid #e4a04a}.new-badge{display:inline-block;margin-left:6px;background:#d64545;color:#fff;border-radius:10px;padding:2px 6px;font-size:11px;font-weight:800}.tabs{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-bottom:15px}.tabs button{width:100%;background:#e7edf2}.tabs .active{background:#16324f;color:#fff}.edit-banner{padding:12px;margin-bottom:14px;background:#fff3c8;border:1px solid #e7ce73;border-radius:8px}.preview-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:9px;margin-top:12px}.preview-item img{width:100%;height:210px;object-fit:contain;background:#eee;border:1px solid #d9dee3;border-radius:8px}.preview-label{text-align:center;font-size:12px;margin-top:4px;color:#555}.result-grid img{transform:scaleX(-1)}.image-tools{display:flex;gap:6px;margin-top:6px}.image-tools button{flex:1;padding:8px 6px;font-size:13px}.table-wrap{width:100%;overflow-x:auto;margin-top:10px}table{width:100%;border-collapse:collapse;min-width:620px}th,td{border:1px solid #ccd3d9;padding:6px;text-align:center}th{background:#e8eef3;white-space:nowrap}.section-head{background:#dce7f0}.position-cell{width:60px;font-weight:700;background:#f3f5f7}.matrix-input{min-width:90px;padding:8px;text-align:center}.review-cell{background:#fff2c4}.matrix-controls,.record-actions,.request-actions,.export-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.export-actions button{flex:1}.record-card,.request-card{border:1px solid #d6dde3;border-radius:10px;padding:13px;margin-top:10px;background:#fff}.record-card.completed,.request-card.completed{border-left:5px solid #278159}.record-card.incomplete,.request-card.pending{border-left:5px solid #e09a24}.record-card.delete-requested{background:#fff9f4;border-top:2px solid #df6b39;border-right:2px solid #df6b39;border-bottom:2px solid #df6b39}.record-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}.record-title{font-size:17px;font-weight:800}.record-meta{font-size:13px;color:#666;margin-top:7px;line-height:1.65}.badge{display:inline-block;padding:5px 9px;border-radius:20px;font-size:12px;font-weight:800;white-space:nowrap}.badge-pending{background:#fff0c9;color:#8a5700}.badge-completed{background:#dcefe5;color:#16603c}.badge-delete{background:#ffe0d2;color:#a33e12}.delete-info{margin-top:9px;padding:9px;background:#fff0e8;border:1px solid #f0b695;border-radius:7px;font-size:13px;color:#803100;line-height:1.6}.log-section{margin-top:22px;padding-top:16px;border-top:2px solid #e5e8eb}.log-title{font-size:17px;font-weight:800}.log-item{width:100%;margin-top:7px;padding:11px;text-align:left;background:#f7f9fb;color:#222;border:1px solid #d9dfe5}.log-current{background:#eaf5ef;border-color:#a8cfb7}.log-version{font-weight:900;color:#16324f}.log-date{margin-top:4px;color:#666;font-size:12px;line-height:1.5}.modifier-box,.complete-worker-box,.confirm-box,.reconfirm-box{margin-top:16px;padding:14px;border-radius:9px}.modifier-box{background:#fff8e7;border:1px solid #e5c76f}.complete-worker-box{background:#f4f8f6;border:1px solid #c8ddd1}.confirm-box{background:#eef6f4;border:1px solid #b9d7cf}.reconfirm-box{background:#fff8e7;border:1px solid #e5c76f}.delete-ready-box{background:#eaf5ef;border:1px solid #a8cfb7;color:#145c39;font-weight:800}.modifier-box label,.complete-worker-box label,.confirm-box label{margin-top:0}.result-title{margin-top:18px;padding:10px;color:#fff;background:#16324f;border-radius:6px;font-weight:800}.request-result-title{background:#276a5a}.image-modal{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.92);display:flex;flex-direction:column}.image-modal-top{display:flex;justify-content:flex-end;padding:10px}.image-modal-viewer{flex:1;min-height:0;overflow:auto;display:flex;align-items:center;justify-content:center;padding:15px}.image-modal-viewer img{max-width:95vw;max-height:82vh;object-fit:contain;transform-origin:center;transition:transform .15s ease}.image-modal-bottom{padding:10px 10px 18px;display:flex;gap:7px;justify-content:center;flex-wrap:wrap}.history-modal{position:fixed;inset:0;z-index:9000;background:rgba(0,0,0,.75);overflow-y:auto;padding:18px}.history-card{width:100%;max-width:1050px;margin:auto;background:#fff;border-radius:12px;padding:18px}.history-head{display:flex;justify-content:space-between;align-items:center;gap:10px;border-bottom:1px solid #ddd;padding-bottom:12px}.history-title{font-size:20px;font-weight:800}.history-info{background:#eef5fb;border:1px solid #cbddea;border-radius:8px;padding:12px;margin-top:13px;line-height:1.7}.history-subtitle{font-size:17px;font-weight:800;margin-top:18px}#exportStage{position:fixed;left:-10000px;top:0;background:#fff;padding:30px;color:#111}.export-sheet{background:#fff;padding:28px;width:max-content;min-width:1000px}.export-sheet-title{text-align:center;font-size:28px;font-weight:800;margin-bottom:18px}.export-sheet-info{border:1px solid #333;padding:12px;margin-bottom:16px;font-size:18px;line-height:1.6}.export-sheet table{min-width:900px;font-size:18px}.export-sheet th,.export-sheet td{padding:10px;border:1px solid #333}.empty{text-align:center;color:#777;padding:25px;margin-top:12px}.section-heading{display:flex;justify-content:space-between;align-items:center;gap:8px}.section-heading h2{margin:0}.refresh{background:#e8edf2}.request-content-preview{margin-top:9px;padding:9px;background:#f7f9fb;border-radius:7px;white-space:pre-wrap;line-height:1.55}.request-detail-focus{margin-top:16px;margin-bottom:14px;background:#fffaf0;border:2px solid #e8a13a;border-left:7px solid #d97706;border-radius:12px;overflow:hidden;box-shadow:0 3px 10px rgba(217,119,6,.12)}.request-detail-focus-title{display:flex;align-items:center;gap:8px;padding:10px 13px;background:#fff0cf;color:#8a4b00;font-size:15px;font-weight:900;border-bottom:1px solid #efc77f}.request-detail-focus-icon{width:23px;height:23px;display:inline-flex;align-items:center;justify-content:center;flex:0 0 23px;background:#d97706;color:#fff;border-radius:50%;font-size:14px;font-weight:900}.request-detail-focus-content{padding:17px 15px;min-height:70px;background:#fffdf8;color:#1f2937;font-size:17px;font-weight:800;line-height:1.7;white-space:pre-wrap;overflow-wrap:anywhere}.filter-toggle-row{display:flex;justify-content:flex-end;align-items:center;margin:10px 0 12px}.filter-toggle-label{display:inline-flex;align-items:center;gap:8px;margin:0;padding:9px 12px;background:#fff8e7;border:1px solid #e3c66f;border-radius:9px;color:#664c00;font-size:13px;font-weight:800;cursor:pointer;user-select:none}.filter-toggle-label input{width:18px;height:18px;margin:0;accent-color:#d97706;cursor:pointer}.schedule-form-head{display:grid;grid-template-columns:1fr 1fr;gap:10px}.schedule-form-head label{margin-top:0}.schedule-rows{display:flex;flex-direction:column;gap:10px;margin-top:14px}.schedule-row-card{position:relative;border:1px solid #d9e1e8;background:#f8fafc;border-radius:11px;padding:12px}.schedule-row-grid{display:grid;grid-template-columns:1fr 1fr 1.6fr .7fr;gap:8px;align-items:end}.schedule-row-grid label{margin:0;font-size:12px;color:#52606d}.schedule-row-grid input{margin-top:4px}.schedule-remove-btn{position:absolute;right:8px;top:8px;width:28px;height:28px;padding:0;border-radius:50%;background:#e8edf2;color:#555;font-size:16px}.schedule-actions{display:flex;gap:8px;margin-top:12px}.schedule-actions button{flex:1}.schedule-list-filters{display:grid;grid-template-columns:1fr 1fr auto auto;gap:8px;align-items:end;margin-top:12px}.schedule-list-filters label{margin:0}.schedule-list-filters button{height:43px}.schedule-summary{margin-top:12px;padding:12px;background:#eef5fb;border:1px solid #cbddea;border-radius:9px;font-weight:800;color:#16324f}.schedule-card{border:1px solid #d6dde3;border-left:5px solid #315f8c;background:#fff;border-radius:10px;padding:13px;margin-top:10px}.schedule-card-title{font-size:16px;font-weight:900;color:#16324f;line-height:1.45}.schedule-card-work{margin-top:8px;padding:10px;background:#f6f8fa;border-radius:8px;font-size:15px;font-weight:800;line-height:1.5}.schedule-card-meta{margin-top:8px;color:#666;font-size:12px;line-height:1.6}.schedule-manpower{display:inline-flex;align-items:center;justify-content:center;min-width:54px;padding:5px 8px;border-radius:999px;background:#e4f0fb;color:#174f7c;font-size:12px;font-weight:900}.schedule-list-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:9px}.schedule-list-actions button{padding:8px 11px;font-size:12px}.home-user{text-align:center;margin-top:10px;font-weight:700;color:#444}.requester-grid{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:7px}.requester-item{position:relative;flex:0 0 calc((100% - 66px)/3);min-width:0}.requester-item input{width:100%;min-width:0;padding:9px 29px 9px 9px;font-size:14px}.requester-remove-btn{position:absolute;right:4px;top:50%;transform:translateY(-50%);width:24px;height:24px;padding:0;border-radius:50%;background:#e8edf2;color:#555;font-size:15px;line-height:24px}.requester-add-btn{flex:0 0 42px;width:42px;height:42px;padding:0;border-radius:8px;background:#16324f;color:#fff;font-size:23px;font-weight:900;line-height:42px;text-align:center}.requester-help{margin-top:6px;color:#666;font-size:13px;line-height:1.5}.admin-delete-wrap{margin-top:12px;padding:12px;border:1px solid #efb0b0;background:#fff5f5;border-radius:9px}
 .transfer-box{margin-top:16px;padding:14px;border-radius:9px;background:#eef5fb;border:1px solid #cbddea}.transfer-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;margin-top:10px}.transfer-row input{margin:0}.transfer-row button{min-width:78px;background:#265f91;color:#fff}.request-log-section{margin-top:20px;padding-top:16px;border-top:2px solid #e5e8eb}.request-log-list{display:flex;flex-direction:column;gap:9px;margin-top:10px}.request-log-item{position:relative;padding:12px 12px 12px 16px;border:1px solid #d9dfe5;border-radius:9px;background:#f8fafb}.request-log-item:before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;border-radius:9px 0 0 9px;background:#16324f}.request-log-item.transfer:before{background:#265f91}.request-log-item.answer:before{background:#276a5a}.request-log-item.reconfirm:before{background:#7a4b16}.request-log-item.update:before{background:#9a6a12}.request-log-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}.request-log-title{font-weight:900;color:#16324f}.request-log-time{font-size:12px;color:#777;white-space:nowrap}.request-log-body{margin-top:6px;font-size:13px;line-height:1.65;color:#444}.request-log-chain{font-weight:800;color:#265f91}.request-log-empty{padding:16px;text-align:center;color:#777;background:#f7f9fb;border-radius:8px}
@@ -159,14 +159,14 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
 <!-- 로그인 / 회원가입 -->
 <div id="authScreen" class="auth-wrap">
   <div class="auth-card">
-    <div class="auth-title">HWDK 작업관리 시스템</div>
+    <div class="auth-title">HWDK 조립공종</div>
     <div id="authSubtitle" class="auth-subtitle">이름과 비밀번호로 로그인합니다.</div>
 
     <label>이름</label>
     <input id="loginName" type="text" autocomplete="username" placeholder="이름 입력">
 
     <label>비밀번호</label>
-    <input id="loginPassword" type="password" autocomplete="current-password" placeholder="비밀번호 입력">
+    <input id="loginPassword" type="password" inputmode="numeric" autocomplete="current-password" placeholder="숫자 6자리 이상">
 
     <div id="loginActions" class="auth-actions">
       <button id="loginBtn" class="primary" style="margin-top:0">로그인</button>
@@ -201,7 +201,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
   <div class="header-inner">
     <div class="header-left">
       <button id="appBackBtn" class="app-back-btn hidden" type="button">← 이전</button>
-      <div class="header-title">HWDK 작업관리 시스템</div>
+      <div class="header-title">HWDK 조립공종</div>
     </div>
     <div class="header-right">
       <span id="userBadge" class="user-badge"></span>
@@ -215,7 +215,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
 <!-- 업무 선택 -->
 <div id="moduleHome" class="home-wrap hidden">
   <div class="home-card">
-    <div class="home-title">HWDK 작업관리 시스템</div>
+    <div class="home-title">HWDK 조립공종</div>
     <div class="home-subtitle">업무 메뉴</div>
     <div id="homeUser" class="home-user"></div>
 
@@ -240,39 +240,36 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
         </button>
       </div>
 
-<div class="dashboard-section">
-  <div class="dashboard-section-title">2. 품질관리</div>
-
-  <div class="dashboard-grid">
-
-    <button
-      id="openBhdBtn"
-      class="module-btn module-dev"
-      disabled
-    >
-      <span class="module-name">조립품질관리</span>
-      <span class="module-sub">조립공종 품질기능 적용 예정</span>
-    </button>
-
-    <button
-      class="module-btn module-dev"
-      disabled
-    >
-      <span class="module-name">품질검사일정</span>
-      <span class="module-sub">개발중</span>
-    </button>
-
-  </div>
-</div>
+      <div class="dashboard-section">
+        <div class="dashboard-section-title">1. 생산운영관리</div>
+        <div class="dashboard-grid">
+          <button id="openScheduleBtn" class="module-btn module-schedule" type="button">
+            <span class="module-name">일일작업등록</span>
+            <span class="module-sub">작업계획 · 투입인원 · 공정률 등록</span>
+          </button>
+          <button class="module-btn module-dev" type="button" disabled>
+            <span class="module-name">호선일정관리</span>
+            <span class="module-sub">개발중</span>
+          </button>
+          <button class="module-btn module-dev" type="button" disabled>
+            <span class="module-name">우선작업순위</span>
+            <span class="module-sub">개발중</span>
+          </button>
+          <button id="openProductionDashboardBtn" class="module-btn module-dashboard" type="button">
+            <span class="module-name">생산통합지표</span>
+            <span class="module-sub">호선 · STAGE · 작업별 공정현황</span>
+          </button>
+        </div>
+      </div>
 
       <div class="dashboard-section">
         <div class="dashboard-section-title">2. 품질관리</div>
         <div class="dashboard-grid">
-          <button id="openBhdBtn" class="module-btn module-bhd">
-            <span class="module-name">결선작업관리</span>
-            <span class="module-sub">선결선 등록 · 작업조회(후결선) · 결선작업목록</span>
+          <button id="openBhdBtn" class="module-btn module-dev" type="button" disabled>
+            <span class="module-name">조립품질관리</span>
+            <span class="module-sub">조립공종 품질기능 적용 예정</span>
           </button>
-          <button class="module-btn module-dev" disabled>
+          <button class="module-btn module-dev" type="button" disabled>
             <span class="module-name">품질검사일정</span>
             <span class="module-sub">개발중</span>
           </button>
@@ -761,7 +758,7 @@ function setAuthMode(mode){
   $("loginActions").classList.toggle("hidden",signup);
   $("signupActions").classList.toggle("hidden",!signup);
   $("authSubtitle").textContent=signup?"사용할 이름과 비밀번호를 등록하세요.":"이름과 비밀번호로 로그인합니다.";
-  $("authHint").textContent=signup?"회원가입 중에는 로그인 버튼이 표시되지 않습니다. 비밀번호는 6자 이상 사용하세요.":"처음 사용하는 작업자는 회원가입을 눌러 등록하세요.";
+  $("authHint").textContent=signup?"회원가입 중에는 로그인 버튼이 표시되지 않습니다. 비밀번호는 숫자 6자리 이상 사용하세요.":"처음 사용하는 작업자는 회원가입을 눌러 등록하세요.";
   $("authStatus").textContent="";
 }
 function showAuth(){hideAllMain();appHeader.classList.add("hidden");authScreen.classList.remove("hidden");setAuthMode("login")}
@@ -852,8 +849,8 @@ async function refreshNotificationBadge(){
     el.classList.toggle("hidden",n===0);
   }
 
-  if(lastUnreadCount>=0&&n>lastUnreadCount)document.title=`(${n}) HWDK 작업관리 시스템`;
-  else if(n===0)document.title="HWDK 작업관리 시스템";
+  if(lastUnreadCount>=0&&n>lastUnreadCount)document.title=`(${n}) HWDK 조립공종`;
+  else if(n===0)document.title="HWDK 조립공종";
 
   lastUnreadCount=n;
 }
@@ -866,7 +863,7 @@ function startNotificationPolling(){
 
 function stopNotificationPolling(){
   if(notificationTimer)clearInterval(notificationTimer);
-  notificationTimer=null;lastUnreadCount=-1;document.title="HWDK 작업관리 시스템";
+  notificationTimer=null;lastUnreadCount=-1;document.title="HWDK 조립공종";
 }
 
 
@@ -900,25 +897,45 @@ $("backLoginBtn").onclick=()=>{
 };
 
 $("signupBtn").onclick=async()=>{
-  const name=normalizeName($("loginName").value), password=$("loginPassword").value, status=$("authStatus");
+  const name=normalizeName($("loginName").value), password=$("loginPassword").value.trim(), status=$("authStatus");
+  status.textContent="";
   if(name.length<2){status.textContent="이름을 2자 이상 입력하세요.";return}
-  if(password.length<6){status.textContent="비밀번호는 6자 이상 입력하세요.";return}
+  if(!/^[0-9]{6,}$/.test(password)){status.textContent="비밀번호는 숫자 6자리 이상 입력하세요.";return}
   try{
     status.textContent="회원가입 중...";
     await supabase.auth.signOut();
+
+    const response=await fetch(`${SUPABASE_URL}/functions/v1/register-user`,{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "apikey":SUPABASE_ANON_KEY,
+        "Authorization":`Bearer ${SUPABASE_ANON_KEY}`
+      },
+      body:JSON.stringify({name,password})
+    });
+
+    let result={};
+    try{result=await response.json()}catch(_){result={}}
+    if(!response.ok)throw new Error(result?.error||result?.detail||`회원가입 오류 HTTP ${response.status}`);
+    if(result?.error)throw new Error(result.error);
+
     const email=await nameToSyntheticEmail(name);
-    let {data,error}=await supabase.auth.signUp({email,password,options:{data:{name}}});
-    if(error)throw error;
-    if(!data.session){
-      const login=await supabase.auth.signInWithPassword({email,password});
-      if(login.error)throw new Error("회원가입은 되었지만 바로 로그인할 수 없습니다. Supabase의 Confirm email 설정을 OFF로 확인하세요.");
-      data=login.data;
-    }
-    const user=data.user||data.session?.user;if(!user)throw new Error("회원가입 사용자 정보를 확인하지 못했습니다.");
-    const {error:profileError}=await supabase.from("user_profiles").upsert({user_id:user.id,name},{onConflict:"user_id"});
-    if(profileError)throw profileError;
-    currentUserId=user.id;currentUserName=name;isAdmin=false;status.textContent="";startNotificationPolling();showHome(true);
-  }catch(e){status.textContent="회원가입 실패: "+(e?.message||"오류")}
+    const {data:loginData,error:loginError}=await supabase.auth.signInWithPassword({email,password});
+    if(loginError)throw loginError;
+    const user=loginData?.user||loginData?.session?.user;
+    if(!user)throw new Error("회원가입은 완료됐지만 로그인 사용자 정보를 확인하지 못했습니다.");
+
+    currentUserId=user.id;
+    currentUserName=name;
+    isAdmin=false;
+    status.textContent="";
+    startNotificationPolling();
+    showHome(true);
+  }catch(e){
+    console.error("회원가입 오류:",e);
+    status.textContent="회원가입 실패: "+(e?.message||"오류가 발생했습니다.");
+  }
 };
 
 $("loginBtn").onclick=async()=>{
