@@ -695,6 +695,7 @@ async function validateRequesterNames(names){
   return cleaned.map(name=>map.get(name.toLowerCase()));
 }
 
+/* 참고: requested_to_user_ids는 jsonb 열입니다. .contains()에 배열을 그대로 주면 Postgres 배열 표기({…})로 전송되어 400 오류가 나므로 JSON 문자열로 넘깁니다. */
 async function refreshNotificationBadge(){
   if(!currentUserId||isAdmin){
     $("notificationCount")?.classList.add("hidden");
@@ -703,13 +704,14 @@ async function refreshNotificationBadge(){
   }
 
   const [incoming,completed,qualityResult]=await Promise.all([
-    supabase.from("assembly_check_requests").select("id",{count:"exact",head:true}).contains("requested_to_user_ids",[currentUserId]).eq("status","pending"),
+    supabase.from("assembly_check_requests").select("id",{count:"exact",head:true}).contains("requested_to_user_ids",JSON.stringify([currentUserId])).eq("status","pending"),
     supabase.from("assembly_check_requests").select("id",{count:"exact",head:true}).eq("created_by",currentUserId).eq("status","completed").eq("author_reconfirmed",false).is("author_completion_read_at",null),
     supabase.from("assembly_workflow").select("id",{count:"exact",head:true}).eq("created_by",currentUserId).eq("process_confirmed",true).in("quality_status",["합격","불합격"]).is("quality_result_read_at",null)
   ]);
 
-  if(incoming.error||completed.error)return;
-  const n=Number(incoming.count||0)+Number(completed.count||0)+Number(qualityResult.error?0:(qualityResult.count||0));
+  /* 한쪽 조회가 실패해도 나머지 알림은 그대로 표시합니다(예: 업무요청 조회 오류 때문에 품질검사 결과 알림까지 사라지지 않게). */
+  if(incoming.error&&completed.error&&qualityResult.error)return;
+  const n=Number(incoming.error?0:(incoming.count||0))+Number(completed.error?0:(completed.count||0))+Number(qualityResult.error?0:(qualityResult.count||0));
 
   for(const id of ["notificationCount","myWorkHomeCount"]){
     const el=$(id);if(!el)continue;
@@ -2454,7 +2456,7 @@ async function loadMyWork(){
   if(isAdmin){st.textContent="관리자 계정에는 개인 지정 업무가 없습니다. 업무요청 목록과 작업품질검사에서 전체 자료를 관리할 수 있습니다.";return}
   st.textContent="나의 업무 불러오는 중...";
   const [assigned,legacyAssigned,authored,qualityResults]=await Promise.all([
-    supabase.from("assembly_check_requests").select("*").contains("requested_to_user_ids",[currentUserId]).order("created_at",{ascending:false}),
+    supabase.from("assembly_check_requests").select("*").contains("requested_to_user_ids",JSON.stringify([currentUserId])).order("created_at",{ascending:false}),
     supabase.from("assembly_check_requests").select("*").eq("requested_to_user_id",currentUserId).order("created_at",{ascending:false}),
     supabase.from("assembly_check_requests").select("*").eq("created_by",currentUserId).order("created_at",{ascending:false}),
     supabase.from("assembly_workflow").select("*").eq("created_by",currentUserId).eq("process_confirmed",true).in("quality_status",["합격","불합격"]).order("quality_checked_at",{ascending:false}).limit(100)
