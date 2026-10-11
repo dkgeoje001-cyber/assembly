@@ -192,7 +192,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
             <span class="module-sub">BLK 조립공정 · 소조립 → 중조립 → 대조립</span>
           </button>
           <button class="module-btn module-dev" disabled>
-            <span class="module-name">호선일정관리</span>
+            <span class="module-name">블럭일정관리</span>
             <span class="module-sub">개발중</span>
           </button>
           <button class="module-btn module-dev" disabled>
@@ -382,7 +382,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
     <div class="section-heading">
       <div>
         <h2>조립 품질검사</h2>
-        <div class="hint">공정 완료확인된 BLK를 검사합니다. 검사항목마다 적합 · 부적합 · 해당없음을 선택하고 종합 판정 의견을 적은 뒤 합격 또는 불합격을 저장합니다. 합격하면 다음 공정이 열리고, 불합격하면 같은 공정 재작업으로 돌아갑니다. 판정 결과는 작업등록자의 나의 업무 · 알림에 표시됩니다.</div>
+        <div class="hint">공정 완료확인된 BLK가 목록으로 표시됩니다. 검사할 건의 <strong>검사항목 열기</strong>를 누르면 체크리스트가 펼쳐집니다. 검사항목마다 적합 · 부적합 · 해당없음을 선택하고 종합 판정 의견을 적은 뒤 합격 또는 불합격을 저장합니다. 합격하면 다음 공정이 열리고, 불합격하면 같은 공정 재작업으로 돌아갑니다. 판정 결과는 작업등록자의 나의 업무 · 알림에 표시됩니다.</div>
       </div>
       <button id="asmQualityRefresh" class="refresh" type="button" style="flex:0 0 auto;white-space:nowrap">새로고침</button>
     </div>
@@ -2212,6 +2212,9 @@ HWDK 조립공정 BLK 순차관리 통합 패치
 .asm-quality-card{border:1px solid #dbe3e9;border-radius:12px;padding:12px;background:#fff}
 .asm-quality-card.pending{border-color:#d7b55c;background:#fffdf5}
 .asm-quality-actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.asm-quality-toggle{width:100%;margin-top:10px;padding:10px;background:#eef5fb;color:#16324f;border:1px solid #cbddea;font-size:14px;font-weight:800}
+.asm-quality-card.open .asm-quality-toggle{background:#16324f;color:#fff;border-color:#16324f}
+.asm-quality-card.pending:not(.open) .asm-quality-toggle{background:#fff0c9;color:#6b4a00;border-color:#e7cc7a}
 .asm-quality-actions textarea{grid-column:1/-1;min-height:74px}
 .asm-dashboard-wrap{margin-top:14px;border-top:2px solid #dbe4ea;padding-top:14px}
 .asm-dashboard-title{font-size:18px;font-weight:900;color:#16324f;margin-bottom:4px}
@@ -3062,6 +3065,7 @@ HWDK 조립공정 BLK 순차관리 통합 패치
         return;
       }
 
+      asmQualityOpen.delete("p" + id);
       alert(`${result} 판정을 저장했습니다.\n원 작업등록자에게 품질검사 결과 알림이 표시됩니다.`);
       asmQualitySaving = false;
       await asmLoadQualityQueue();
@@ -3098,7 +3102,33 @@ HWDK 조립공정 BLK 순차관리 통합 패치
          <div class="request-content-preview"><strong>종합 판정 의견</strong><br>${asmEsc(r.quality_note || "-")}</div>
          <div class="asm-log-meta">검사자 ${asmEsc(r.quality_checked_name || "-")} · ${asmEsc(r.quality_checked_at ? new Date(r.quality_checked_at).toLocaleString("ko-KR") : "-")}</div>`;
 
-    return `<div id="asmQualityCard-${r.id}" class="asm-quality-card ${actionable ? "pending" : ""}">${head}${body}</div>`;
+    /* 검사항목은 접어 두고, 버튼을 눌렀을 때만 펼칩니다. 펼친 카드는 목록을 다시 그려도 유지됩니다. */
+    const openKey = (actionable ? "p" : "h") + r.id;
+    const open = asmQualityOpen.has(openKey);
+    const summary = actionable ? "" : `<div class="asm-log-meta">검사자 ${asmEsc(r.quality_checked_name || "-")} · ${asmEsc(asmDate(r.quality_checked_at))}</div>`;
+    return `<div id="asmQualityCard-${r.id}" class="asm-quality-card ${actionable ? "pending" : ""}${open ? " open" : ""}">
+      ${head}${summary}
+      <button type="button" class="asm-quality-toggle" data-asm-toggle="${r.id}" data-open-key="${openKey}" data-label="${actionable ? "검사항목" : "검사 기록"}" aria-expanded="${open}">${asmQualityToggleText(actionable ? "검사항목" : "검사 기록", open)}</button>
+      <div class="asm-quality-body${open ? "" : " hidden"}">${body}</div>
+    </div>`;
+  }
+
+  const asmQualityOpen = new Set();
+  function asmQualityToggleText(label, open) {
+    return open ? `${label} 접기 ▲` : `${label === "검사항목" ? "검사항목 열기" : "검사 기록 보기"} ▼`;
+  }
+  function asmToggleQualityCard(btn) {
+    const id = String(btn.dataset.asmToggle);
+    const card = asmE(`asmQualityCard-${id}`);
+    const body = card?.querySelector(".asm-quality-body");
+    if (!card || !body) return;
+    const open = body.classList.contains("hidden");
+    body.classList.toggle("hidden", !open);
+    card.classList.toggle("open", open);
+    btn.setAttribute("aria-expanded", String(open));
+    btn.textContent = asmQualityToggleText(btn.dataset.label, open);
+    /* 검사대기(p)와 검사이력(h)을 따로 기억해, 판정 뒤 이력으로 넘어간 카드는 다시 접힌 상태로 보입니다. */
+    if (open) asmQualityOpen.add(btn.dataset.openKey); else asmQualityOpen.delete(btn.dataset.openKey);
   }
 
   function asmRenderQuality(pending, history) {
@@ -3119,6 +3149,9 @@ HWDK 조립공정 BLK 순차관리 통합 패치
 
     list.querySelectorAll("[data-asm-qid]").forEach(btn => {
       btn.onclick = () => asmSetQuality(Number(btn.dataset.asmQid), btn.dataset.asmResult);
+    });
+    list.querySelectorAll("[data-asm-toggle]").forEach(btn => {
+      btn.onclick = () => asmToggleQualityCard(btn);
     });
   }
 
