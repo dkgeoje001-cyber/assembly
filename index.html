@@ -516,6 +516,20 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+<script>
+/* 앱 시작 확인: 아래 메인 스크립트는 인터넷에서 Supabase 연결 모듈(cdn.jsdelivr.net)을 내려받아야 시작됩니다.
+   그걸 못 받으면 버튼이 전혀 동작하지 않으므로, 그 사실을 로그인 화면에 알려줍니다. */
+(() => {
+  const show = (text) => {
+    if (window.__hwdkAppReady) return;
+    const el = document.getElementById("authStatus");
+    if (el) el.textContent = text;
+  };
+  const failText = "앱을 시작하지 못했습니다. 인터넷에서 연결 모듈(cdn.jsdelivr.net)을 내려받지 못했습니다. 인터넷 연결 또는 사내 방화벽을 확인하고, 이 파일을 Chrome · Edge에서 직접 열어 주세요. (대화창 미리보기에서는 동작하지 않습니다.)";
+  setTimeout(() => show("앱을 시작하는 중입니다... 계속 이 문구가 보이면 인터넷 연결 또는 사내 방화벽(cdn.jsdelivr.net, supabase.co)을 확인하세요."), 4000);
+  addEventListener("load", () => setTimeout(() => show(failText), 300));
+})();
+</script>
 <script type="module">
 import { createClient } from "https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm";
 
@@ -563,12 +577,52 @@ function appGoBack(){
 $("appBackBtn").onclick=appGoBack;
 function normalizeName(v){return String(v||"").trim().replace(/\s+/g," ")}
 
+/* SHA-256 직접 계산. 브라우저는 주소가 https 또는 localhost가 아닐 때(예: http://192.168.0.10:3000) crypto.subtle을 꺼 두므로,
+   그런 주소로 접속한 PC · 휴대폰에서는 이 계산을 씁니다. crypto.subtle과 결과가 같아 기존 가입 계정으로 그대로 로그인됩니다. */
+function sha256HexPlain(bytes){
+  const K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  const H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  const len=bytes.length,total=(((len+8)>>6)+1)<<6,data=new Uint8Array(total);
+  data.set(bytes);data[len]=0x80;
+  const view=new DataView(data.buffer);
+  view.setUint32(total-8,Math.floor(len/0x20000000));view.setUint32(total-4,(len<<3)>>>0);
+  const w=new Uint32Array(64),rotr=(x,n)=>(x>>>n)|(x<<(32-n));
+  for(let off=0;off<total;off+=64){
+    for(let i=0;i<16;i++)w[i]=view.getUint32(off+i*4);
+    for(let i=16;i<64;i++){
+      const s0=rotr(w[i-15],7)^rotr(w[i-15],18)^(w[i-15]>>>3),s1=rotr(w[i-2],17)^rotr(w[i-2],19)^(w[i-2]>>>10);
+      w[i]=(w[i-16]+s0+w[i-7]+s1)>>>0;
+    }
+    let [a,b,c,d,e,f,g,h]=H;
+    for(let i=0;i<64;i++){
+      const t1=(h+(rotr(e,6)^rotr(e,11)^rotr(e,25))+((e&f)^(~e&g))+K[i]+w[i])>>>0;
+      const t2=((rotr(a,2)^rotr(a,13)^rotr(a,22))+((a&b)^(a&c)^(b&c)))>>>0;
+      h=g;g=f;f=e;e=(d+t1)>>>0;d=c;c=b;b=a;a=(t1+t2)>>>0;
+    }
+    H[0]=(H[0]+a)>>>0;H[1]=(H[1]+b)>>>0;H[2]=(H[2]+c)>>>0;H[3]=(H[3]+d)>>>0;H[4]=(H[4]+e)>>>0;H[5]=(H[5]+f)>>>0;H[6]=(H[6]+g)>>>0;H[7]=(H[7]+h)>>>0;
+  }
+  return H.map(x=>x.toString(16).padStart(8,"0")).join("");
+}
+async function sha256Hex(bytes){
+  if(globalThis.crypto?.subtle){
+    try{const hash=await crypto.subtle.digest("SHA-256",bytes);return [...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("")}catch(e){}
+  }
+  return sha256HexPlain(bytes);
+}
 async function nameToSyntheticEmail(name){
   const normalized=normalizeName(name).toLowerCase();
   const bytes=new TextEncoder().encode(normalized);
-  const hash=await crypto.subtle.digest("SHA-256",bytes);
-  const hex=[...new Uint8Array(hash)].map(b=>b.toString(16).padStart(2,"0")).join("");
+  const hex=await sha256Hex(bytes);
   return `assembly.${hex.slice(0,40)}@daekong.com`;
+}
+/* 로그인 · 회원가입이 실패한 실제 이유를 구분해서 보여줍니다(서버 연결 문제인지, 이름 · 비밀번호 문제인지). */
+function authErrorText(e){
+  const msg=String(e?.message||e||""),code=String(e?.code||"");
+  if(code==="invalid_credentials"||/invalid login credentials/i.test(msg))return "이름 또는 비밀번호가 맞지 않습니다. 가입할 때 쓴 이름과 비밀번호를 확인하세요. (처음 쓰는 이름이면 회원가입을 먼저 하세요.)";
+  if(code==="user_already_exists"||/already registered|already exists/i.test(msg))return "이미 가입된 이름입니다. 로그인 화면에서 로그인하세요.";
+  if(e?.name==="AuthRetryableFetchError"||/failed to fetch|networkerror|load failed|network request failed|fetch failed/i.test(msg))return "서버(supabase.co)에 연결하지 못했습니다. 인터넷 연결을 확인하세요. 사내망이면 방화벽에서 supabase.co 접속이 막혀 있을 수 있습니다.";
+  if(code==="over_request_rate_limit"||/rate limit/i.test(msg))return "시도가 너무 많습니다. 1~2분 뒤 다시 시도하세요.";
+  return msg||"알 수 없는 오류";
 }
 
 function hideAllMain(){authScreen.classList.add("hidden");moduleHome.classList.add("hidden");scheduleApp.classList.add("hidden");$("productionDashboardApp")?.classList.add("hidden");$("boardApp")?.classList.add("hidden");qualityApp.classList.add("hidden");requestApp.classList.add("hidden");myWorkApp.classList.add("hidden")}
@@ -727,7 +781,7 @@ $("signupBtn").onclick=async()=>{
     const {error:profileError}=await supabase.from("assembly_user_profiles").upsert({user_id:user.id,name},{onConflict:"user_id"});
     if(profileError)throw profileError;
     currentUserId=user.id;currentUserName=name;isAdmin=false;status.textContent="";startNotificationPolling();showHome(true);
-  }catch(e){status.textContent="회원가입 실패: "+(e?.message||"오류")}
+  }catch(e){status.textContent="회원가입 실패: "+authErrorText(e)}
 };
 
 $("loginBtn").onclick=async()=>{
@@ -738,7 +792,7 @@ $("loginBtn").onclick=async()=>{
     const email=await nameToSyntheticEmail(name);
     const {data,error}=await supabase.auth.signInWithPassword({email,password});if(error)throw error;
     await enterWorkerSession(data.user);status.textContent="";
-  }catch(e){status.textContent="로그인 실패: 이름 또는 비밀번호를 확인하세요."}
+  }catch(e){status.textContent="로그인 실패: "+authErrorText(e)}
 };
 $("loginPassword").addEventListener("keydown",e=>{
   if(e.key!=="Enter")return;
@@ -757,7 +811,7 @@ $("adminLoginBtn").onclick=async()=>{
     currentUserId=data.user.id;
     if(!await checkCurrentUserAdmin()){await supabase.auth.signOut();throw new Error("관리자 권한이 없는 계정입니다.")}
     isAdmin=true;currentUserName="관리자";$("adminPassword").value="";showHome(true);
-  }catch(e){status.textContent="관리자 로그인 실패: "+(e?.message||"오류")}
+  }catch(e){status.textContent="관리자 로그인 실패: "+authErrorText(e)}
 };
 $("adminPassword").addEventListener("keydown",e=>{if(e.key==="Enter")$("adminLoginBtn").click()});
 
@@ -2448,6 +2502,7 @@ Object.defineProperties(window,{supabase:{get:()=>supabase,configurable:true},cu
 /* ---------- 초기 실행 ---------- */
 async function initialize(){replaceState({screen:"auth"});showAuth();const {data}=await supabase.auth.getSession();const session=data.session;if(!session)return;currentUserId=session.user.id;if(await checkCurrentUserAdmin()){isAdmin=true;currentUserName="관리자";replaceState({screen:"home",admin:true});showHome(false);return}const name=await loadMyProfile(session.user.id);if(name){isAdmin=false;currentUserName=name;startNotificationPolling();replaceState({screen:"home",admin:false});showHome(false)}}
 initialize();
+window.__hwdkAppReady=true;
 </script>
 <!-- =========================================================
 HWDK 조립공정 BLK 순차관리 통합 패치
