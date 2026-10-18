@@ -258,7 +258,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
 
       <!-- 신규작업: 처음 들어오는 블록을 DAP 보고 등록 -->
       <div id="asmNewPanel" class="asm-new hidden">
-        <div class="asm-section-title">새 블록 등록 <span class="hint">(DAP를 보고 적습니다)</span></div>
+        <div class="asm-section-title">새 블록 등록 <span class="hint">(선종 · 호선 · 대조립을 넣으면 기준표에서 중조립 · 소조립이 자동으로 채워집니다)</span></div>
         <div class="asm-form-grid asm-blk-grid">
           <div><label>선종</label>
             <select id="asmNewType">
@@ -281,6 +281,7 @@ header{padding:9px 10px}.header-inner{display:grid;grid-template-columns:minmax(
           </div>
           <div id="asmNewDestWrap" class="hidden"><label>반출처</label><input id="asmNewDest" placeholder="예: 한화오션 OO공장"></div>
         </div>
+        <div id="asmNewAuto" class="asm-new-auto hidden"></div>
         <div class="asm-new-field">
           <label>중조립 <span class="hint">한 줄에 하나 · 기호 + 작업장코드 (DAP 표기 그대로 붙여 넣어도 됩니다)</span></label>
           <textarea id="asmNewMids" rows="4" placeholder="TT1 M1H2&#10;TT2 H2G9&#10;SS1A/SS1P (R1G9/R3G9)"></textarea>
@@ -2808,6 +2809,18 @@ HWDK 조립공정 BLK 순차관리 통합 패치
 .asm-note-line{color:#8a5700}
 .asm-new-preview-out{margin-top:6px;padding:6px 9px;border-radius:8px;background:#f6f3fb;color:#55407a;font-weight:800}
 .asm-new-many{color:#174f7c}
+.asm-new-auto{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 12px;padding:10px 12px;border:1px solid #b9d7c4;border-radius:10px;background:#f2fbf5;font-size:13px;line-height:1.55;color:#1f4d33}
+.asm-new-auto > div{flex:1 1 260px;min-width:0}
+.asm-new-auto strong{display:block;font-weight:900}
+.asm-new-auto span{display:block;color:#3f5f4b}
+.asm-new-auto em{display:block;font-style:normal;font-weight:800;color:#a15c00}
+.asm-new-auto button{margin-top:0;white-space:nowrap}
+.asm-new-auto.similar{border-color:#e6cf9a;background:#fffaf0;color:#6b4a00}
+.asm-new-auto.similar span{color:#6b5a2e}
+.asm-new-auto.exist{border-color:#b9cfe0;background:#f2f7fc;color:#16324f}
+.asm-new-auto.exist span{color:#40566e}
+.asm-new-auto.none,.asm-new-auto.ask{border-color:#d7dde4;background:#f7f9fb;color:#334155}
+.asm-new-auto.none span,.asm-new-auto.ask span{color:#5b6777}
 .asm-fam-out-edit select{margin-top:4px}
 @media(max-width:600px){
   .asm-crew{grid-template-columns:repeat(3,minmax(0,1fr))}
@@ -2992,6 +3005,73 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     return asmTree
       .filter(t => t.ship_no === ship && t.grand_no === grand)
       .sort((a, b) => (a.sort_order - b.sort_order) || asmNumSort(a.mid_no, b.mid_no));
+  }
+
+  /* ===== 블록 기준표(PROJECT · 대조립 → 중조립 · 소조립 · 도면 주의) =====
+     신규작업에서 선종 · 호선 · 대조립을 넣으면 여기서 구성을 찾아 자동으로 채웁니다.
+     표가 없거나 읽지 못하면 빈 기준표로 보고, 예전처럼 직접 적어 등록합니다. */
+  const ASM_MASTER_TABLE = "assembly_block_master";
+  let asmMaster = [];
+  let asmMasterAt = 0;
+  /* "5531/32/35" → 5531 · 5532 · 5535 (앞자리 생략), "661/671", "5531, 5532"도 가능 */
+  function asmExpandNos(raw) {
+    const toks = String(raw || "").toUpperCase().split(/[\/,\s]+/).map(x => x.trim()).filter(Boolean);
+    if (!toks.length) return [];
+    const first = toks[0];
+    const list = toks.map((t, i) => i && t.length < first.length && /^\d+$/.test(t) && /^\d+$/.test(first) ? first.slice(0, first.length - t.length) + t : t);
+    return [...new Set(list)];
+  }
+  function asmMasterRowNorm(r) {
+    const hulls = (Array.isArray(r.hulls) && r.hulls.length ? r.hulls : asmExpandNos(r.project)).map(asmShipKey).filter(Boolean);
+    return {...r, ship_type: asmNorm(r.ship_type), grand_no: asmNorm(r.grand_no), project: String(r.project || "").trim() || hulls.join("/"), hulls, lines: String(r.lines || ""), grand_note: String(r.grand_note || "")};
+  }
+  async function asmLoadMaster(force = false) {
+    if (!force && asmMasterAt && Date.now() - asmMasterAt < 60000) return asmMaster;
+    try {
+      const {data, error} = await supabase.from(ASM_MASTER_TABLE).select("*").order("id", {ascending:true}).limit(5000);
+      if (error) throw error;
+      asmMaster = (data || []).map(asmMasterRowNorm);
+      asmMasterAt = Date.now();
+    } catch (e) {
+      asmMasterAt = Date.now() - 50000;   // 10초 뒤 다시 시도
+    }
+    return asmMaster;
+  }
+  const asmHullDist = (a, b) => { const x = parseInt(a, 10), y = parseInt(b, 10); return isNaN(x) || isNaN(y) ? 1e9 : Math.abs(x - y); };
+  /* 호선 + 대조립 → 구성 찾기
+     ① 기준표에서 그 호선이 들어 있는 PROJECT의 같은 대조립
+     ② 없으면 같은 선종 다른 호선의 같은 대조립(기준표 → 블록 구성 순, 호선 번호가 가까운 것)
+     선종을 고르지 않았는데 같은 대조립 번호가 여러 선종에 있으면 선종을 먼저 물어봅니다. */
+  function asmFindTemplate(shipType, ship, grand) {
+    shipType = asmNorm(shipType); ship = asmShipKey(ship); grand = asmNorm(grand);
+    if (!ship || !grand) return null;
+    const own = asmMaster.filter(m => m.grand_no === grand && m.hulls.includes(ship));
+    if (own.length) {
+      const m = own.find(x => !shipType || !x.ship_type || x.ship_type === shipType) || own[own.length - 1];
+      return {kind:"master", shipType:m.ship_type, lines:m.lines, note:m.grand_note, project:m.project, from:m.project, row:m};
+    }
+    const cands = [];
+    asmMaster.filter(m => m.grand_no === grand && m.lines.trim()).forEach(m => cands.push({
+      shipType:m.ship_type, lines:m.lines, note:m.grand_note, from:`PROJECT ${m.project}`, project:m.project,
+      dist:Math.min(...m.hulls.map(h => asmHullDist(h, ship)), 1e9), rank:0
+    }));
+    const treeShips = [...new Set(asmTree.filter(t => t.grand_no === grand && t.ship_no !== ship).map(t => t.ship_no))];
+    treeShips.forEach(sh => {
+      const mids = asmTreeMids(sh, grand);
+      if (!mids.length) return;
+      cands.push({shipType:mids.find(m => m.ship_type)?.ship_type || "", lines:asmTreeLinesText(mids), note:mids.find(m => m.grand_note)?.grand_note || "",
+        from:`${sh}호선`, project:"", dist:asmHullDist(sh, ship), rank:1});
+    });
+    if (!cands.length) return null;
+    let pool = cands;
+    if (shipType) pool = cands.filter(c => c.shipType === shipType || !c.shipType);
+    else {
+      const types = [...new Set(cands.map(c => c.shipType).filter(Boolean))];
+      if (types.length > 1) return {kind:"ask", types};
+    }
+    if (!pool.length) return null;
+    pool.sort((a, b) => a.rank - b.rank || a.dist - b.dist);
+    return {kind:"similar", ...pool[0]};
   }
 
   /* BLK 묶음(예: 11A)에 속한 대조립 번호 목록 */
@@ -4125,6 +4205,17 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     if (!unit) { box.innerHTML = ""; box.className = "asm-tree-box hidden"; return; }
     if (unit.kind === "legacy") {
       box.className = "asm-tree-box legacy";
+      /* 블록 구성에는 없지만 기준표(PROJECT)에 있는 대조립이면 → 신규작업으로 바로 등록 */
+      const tpl = asmFindTemplate(asmSetup.type || "", unit.ship, unit.blk);
+      if (tpl && tpl.kind === "master") {
+        const cnt = asmTemplateCount(tpl.lines, unit.blk);
+        box.innerHTML = `<strong>${asmEsc(unit.ship)}호선 대조립 ${asmEsc(unit.blk)}은(는) 아직 등록되지 않았지만 기준표(PROJECT ${asmEsc(tpl.project)})에 있습니다.</strong>
+          <span class="asm-current-sub">[신규작업으로 등록]을 누르면 ${cnt ? `중조립 ${cnt.mids}개 · 소조립 ${cnt.parts}개가` : "중조립 · 소조립이"} 자동으로 채워집니다. 납기만 넣고 등록하세요.</span>
+          <div class="asm-actions"><button type="button" class="primary" id="asmLegacyToNew" style="margin-top:6px">신규작업으로 등록</button></div>`;
+        asmE("asmLegacyToNew")?.addEventListener("click", () => asmStartNewFrom(tpl.shipType || asmSetup.type || "", unit.ship, unit.blk));
+        return;
+      }
+      if (!asmMasterAt) asmLoadMaster().then(() => { if (asmMaster.length && asmCtx?.unit === unit) asmRenderTreeBox(); });
       box.innerHTML = unit.looksGrand
         ? `<strong>블록 구성에 없는 번호입니다.</strong> 대조립이라면 <strong>블록 구성</strong> 탭에서 BLK · 구성 중조립 · 소조립을 먼저 등록하세요. 그대로 등록하면 이 번호 하나에서 소조립 입고 → 중조립 → 대조립을 진행합니다.`
         : `블록 구성에 없는 번호입니다. 이 번호 하나에서 소조립 입고 → 중조립 → 대조립을 진행합니다. <span class="hint">블록 구성 탭에 등록하면 소조립 입고 LIST와 대조립 시작 조건이 자동으로 관리됩니다.</span>`;
@@ -4850,6 +4941,8 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       const t = asmE("asmNewType"), sh = asmE("asmNewShip");
       if (t && !t.value && asmSetup.type && [...t.options].some(o => o.value === asmSetup.type)) t.value = asmSetup.type;
       if (sh && !sh.value && asmSetup.ship) sh.value = asmSetup.ship;
+      asmLoadMaster();
+      asmScheduleNewAuto();
     }
   }
 
@@ -5148,6 +5241,7 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     asmBindSetupUi();
     asmSetJob(asmJob);
     asmLoadTree(true).then(asmRenderBlkOptions);
+    asmLoadMaster(true);
     /* 이 기기에서 마지막으로 고른 대조립이면(또는 BLK 칸이 비었으면) 작업 설정 그대로 다시 엽니다. */
     const blkNow = asmNorm(asmE("asmBlkNo")?.value), shipNow = asmShipKey(asmE("asmShipNo")?.value);
     const remembered = !!asmSetup.grand && (!blkNow || (blkNow === asmNorm(asmSetup.grand) && shipNow === asmShipKey(asmSetup.ship)));
@@ -5714,6 +5808,8 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       });
       if (res.error) { status.textContent = res.error; return; }
       status.textContent = res.text;
+      await asmLoadTree(true);
+      await asmUpsertMaster(asmE("asmTreeShipType").value, [asmShipKey(asmE("asmTreeShipNo").value)], asmNorm(asmE("asmTreeGrand").value).replace(/\s+/g, ""), "", "블록 구성 저장");
       await asmLoadTreeList();
       asmRenderBlkOptions();
     } catch (e) {
@@ -5734,14 +5830,7 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       .map(l => /^소조/.test(l) ? l : `소조 ${l}`);
     return [mids, ...parts].join("\n");
   }
-  /* 여러 척 · 쌍 블록 한 번에: "5531/32/35" → 5531 · 5532 · 5535, "661/671" → 661 · 671, "5531, 5532"도 가능 */
-  function asmExpandNos(raw) {
-    const toks = String(raw || "").toUpperCase().split(/[\/,\s]+/).map(x => x.trim()).filter(Boolean);
-    if (!toks.length) return [];
-    const first = toks[0];
-    const list = toks.map((t, i) => i && t.length < first.length && /^\d+$/.test(t) && /^\d+$/.test(first) ? first.slice(0, first.length - t.length) + t : t);
-    return [...new Set(list)];
-  }
+  /* 여러 척 · 쌍 블록 한 번에: asmExpandNos("5531/32/35") → 5531 · 5532 · 5535 (블록 기준표 부분에 있음) */
   function asmNewValues() {
     const ships = asmExpandNos(asmE("asmNewShip")?.value).map(asmShipKey).filter(Boolean);
     const grands = asmExpandNos(asmE("asmNewGrand")?.value).map(g => asmNorm(g).replace(/\s+/g, "")).filter(Boolean);
@@ -5780,6 +5869,177 @@ HWDK 조립공정 BLK 순차관리 통합 패치
       <ul>${rows}${dCoded.length ? `<li><strong>대조 직접</strong> · 소조립 ${dCoded.length}개 (${asmEsc(dCoded.map(d => d.no).join(", "))}) → 대조립 ${asmEsc(grand)}</li>` : ""}${dOpen.length ? `<li><strong>배정 전</strong> · 소조립 ${dOpen.length}개 (${asmEsc(dOpen.map(d => d.no).join(", "))}) → 대조립 BLK에서 입고 확인, 코드 확인 후 블록 구성에서 중조립 배정</li>` : ""}</ul>
       ${v.mode === "out" ? `<div class="asm-new-preview-out">대조립은 다른 곳${v.dest ? `(${asmEsc(v.dest)})` : ""}에서 합니다 · 이 블록은 중조립까지 기록</div>` : ""}`;
   }
+  /* ===== 신규작업 자동 채우기: 선종 · 호선 · 대조립 → 기준표에서 중조립 · 소조립 · 도면 주의 ===== */
+  let asmNewAutoTimer = 0;
+  let asmNewAutoSeq = 0;
+  let asmNewLastTpl = null;
+  /* 기준표 줄(DAP 형식)을 중조립 칸 · 소조립 칸으로 나눕니다. 소조립 칸은 앞의 '소조'를 빼고 적습니다. */
+  function asmSplitTemplate(lines) {
+    const mids = [], parts = [];
+    String(lines || "").split(/\r?\n/).map(s => s.trim()).filter(Boolean).forEach(l => {
+      if (/^소조립?(\s|[:：>]|$)/.test(l)) {
+        let rest = l.replace(/^소조립?\s*/, "");
+        const m = rest.match(/^[:：]\s*(.*)$/);
+        if (m) {
+          const first = (m[1].split(/[\s,]+/)[0] || "");
+          /* 첫 번호가 작업장 코드처럼 보이면 ': '를 남겨 둡니다(코드로 잘못 읽지 않게). */
+          rest = /^[A-Z]\d{1,2}[A-Z]\d{1,2}$/i.test(first) ? `: ${m[1]}` : m[1];
+        }
+        parts.push(rest);
+      } else mids.push(l);
+    });
+    return {mids: mids.join("\n"), parts: parts.join("\n")};
+  }
+  function asmTemplateCount(lines, grand) {
+    const p = asmParseTreeLines(lines, grand || "X");
+    if (p.error) return null;
+    return {mids:p.mids.length, parts:p.mids.reduce((n, m) => n + m.parts.length, 0) + p.direct.length};
+  }
+  /* 자동으로 채운 칸만 바꿉니다(직접 고친 칸은 그대로). */
+  const asmNewAutoFields = ["asmNewMids", "asmNewParts", "asmNewNote"];
+  const asmNewFieldIsAuto = (el) => el && (!el.value.trim() || (el.dataset.auto !== undefined && el.value === el.dataset.auto));
+  function asmNewFillFields(vals, force) {
+    asmNewAutoFields.forEach(id => {
+      const el = asmE(id);
+      if (!el) return;
+      if (!force && !asmNewFieldIsAuto(el)) return;
+      el.value = vals[id] || "";
+      el.dataset.auto = el.value;
+    });
+  }
+  function asmNewClearAuto() {
+    asmNewAutoFields.forEach(id => {
+      const el = asmE(id);
+      if (el && el.dataset.auto !== undefined && el.value === el.dataset.auto) { el.value = ""; delete el.dataset.auto; }
+    });
+  }
+  function asmNewAutoBox(html, cls) {
+    const box = asmE("asmNewAuto");
+    if (!box) return;
+    if (!html) { box.innerHTML = ""; box.className = "asm-new-auto hidden"; return; }
+    box.className = `asm-new-auto ${cls || ""}`.trim();
+    box.innerHTML = html;
+  }
+  function asmScheduleNewAuto() {
+    clearTimeout(asmNewAutoTimer);
+    asmNewAutoTimer = setTimeout(() => { asmNewAutoFill(); }, 300);
+  }
+  async function asmNewAutoFill(force) {
+    const seq = ++asmNewAutoSeq;
+    const v = asmNewValues();
+    if (!v.ship || !v.grand) { asmNewLastTpl = null; asmNewAutoBox(""); return; }
+    await Promise.all([asmLoadMaster(), asmLoadTree()]);
+    if (seq !== asmNewAutoSeq) return;
+    const typeLabel = (t) => ASM_TYPE_LABEL[t] || t;
+    /* ④ 이미 등록된 블록이면 기존작업에서 열기 */
+    const exist = v.ships.flatMap(sh => v.grands.filter(g => asmTreeMids(sh, g).length).map(g => ({sh, g})));
+    if (exist.length) {
+      asmNewLastTpl = null;
+      asmNewClearAuto();
+      asmRenderNewPreview();
+      const e0 = exist[0], mids = asmTreeMids(e0.sh, e0.g);
+      const cnt = asmTemplateCount(asmTreeLinesText(mids), e0.g);
+      asmNewAutoBox(`<div><strong>${asmEsc(exist.map(x => `${x.sh}호선 대조립 ${x.g}`).join(", "))}은(는) 이미 등록되어 있습니다.</strong>
+        <span>기존작업에서 고르면 ${cnt ? `중조립 ${cnt.mids}개 · 소조립 ${cnt.parts}개가` : "중조립 · 소조립이"} 바로 나옵니다.</span></div>
+        <button type="button" class="primary" data-asm-new-open="${asmEsc(e0.sh)}|${asmEsc(e0.g)}">기존작업에서 열기</button>`, "exist");
+      asmE("asmNewAuto")?.querySelector("[data-asm-new-open]")?.addEventListener("click", ev => {
+        const [sh, g] = ev.currentTarget.dataset.asmNewOpen.split("|");
+        asmOpenExisting(sh, g);
+      });
+      return;
+    }
+    const tpl = asmFindTemplate(v.shipType, v.ship, v.grand);
+    if (!tpl) {
+      asmNewLastTpl = null;
+      asmNewClearAuto();
+      asmRenderNewPreview();
+      asmNewAutoBox(`<div><strong>기준표에 ${asmEsc(v.ship)}호선 대조립 ${asmEsc(v.grand)} 구성이 없습니다.</strong>
+        <span>DAP를 보고 아래 중조립 · 소조립을 적어 주세요. 한 번 등록하면 같은 PROJECT 다른 호선부터는 자동으로 나옵니다.</span></div>`, "none");
+      return;
+    }
+    if (tpl.kind === "ask") {
+      asmNewLastTpl = null;
+      asmNewClearAuto();
+      asmRenderNewPreview();
+      asmNewAutoBox(`<div><strong>대조립 ${asmEsc(v.grand)}은(는) ${asmEsc(tpl.types.map(typeLabel).join(" · "))} 여러 선종에 있습니다.</strong>
+        <span>선종을 먼저 고르면 그 선종의 구성을 불러옵니다.</span></div>`, "ask");
+      return;
+    }
+    asmNewLastTpl = tpl;
+    const split = asmSplitTemplate(tpl.lines);
+    const vals = {asmNewMids: split.mids, asmNewParts: split.parts, asmNewNote: tpl.note || ""};
+    const edited = asmNewAutoFields.some(id => !asmNewFieldIsAuto(asmE(id)) && asmE(id).value !== vals[id]);
+    asmNewFillFields(vals, force);
+    const typeSel = asmE("asmNewType");
+    let typeMsg = "";
+    if (typeSel && tpl.shipType && [...typeSel.options].some(o => o.value === tpl.shipType)) {
+      if (!typeSel.value) typeSel.value = tpl.shipType;
+      else if (typeSel.value !== tpl.shipType) typeMsg = ` <em>선종이 기준표(${asmEsc(typeLabel(tpl.shipType))})와 다릅니다. 확인하세요.</em>`;
+    }
+    asmRenderNewPreview();
+    const cnt = asmTemplateCount(tpl.lines, v.grand);
+    const what = cnt ? `중조립 ${cnt.mids}개 · 소조립 ${cnt.parts}개` : "구성";
+    const src = tpl.kind === "master"
+      ? `PROJECT ${asmEsc(tpl.project)} · 대조립 ${asmEsc(v.grand)} 기준표에서 ${what}를 불러왔습니다.`
+      : `기준표에 ${asmEsc(v.ship)}호선 대조립 ${asmEsc(v.grand)}은(는) 없어, 같은 ${asmEsc(typeLabel(tpl.shipType) || "선종")} ${asmEsc(tpl.from)}의 대조립 ${asmEsc(v.grand)} 구성(${what})을 불러왔습니다. DAP와 같은지 꼭 확인하세요.`;
+    asmNewAutoBox(`<div><strong>${src}</strong>${typeMsg}
+      <span>${edited && !force ? "직접 고친 칸은 그대로 두었습니다. " : ""}납기를 넣고 [블록 등록]을 누르면 됩니다. DAP와 다른 곳은 아래 칸에서 고치세요.</span></div>
+      ${edited && !force ? `<button type="button" class="secondary" data-asm-new-refill>기준표 내용으로 다시 채우기</button>` : ""}`, tpl.kind === "master" ? "ok" : "similar");
+    asmE("asmNewAuto")?.querySelector("[data-asm-new-refill]")?.addEventListener("click", () => asmNewAutoFill(true));
+  }
+  /* 이미 등록된 블록 → 기존작업에서 고른 상태로 엽니다. */
+  async function asmOpenExisting(ship, grand) {
+    const mids = asmTreeMids(ship, grand);
+    asmSetup.type = mids.find(m => m.ship_type)?.ship_type || asmSetup.type;
+    asmSetup.ship = ship; asmSetup.grand = grand;
+    asmSaveSetup();
+    asmSetJob("exist");
+    asmRenderBlockPicker();
+    await asmSelectGrand(true);
+  }
+  /* 기존작업 직접 입력 번호가 기준표에 있으면 → 신규작업으로 넘겨 자동 채우기 */
+  async function asmStartNewFrom(shipType, ship, grand) {
+    ["asmNewMids", "asmNewParts", "asmNewNote", "asmNewOut", "asmNewDest"].forEach(id => { const el = asmE(id); if (el) { el.value = ""; delete el.dataset.auto; } });
+    if (asmE("asmNewMode")) asmE("asmNewMode").value = "";
+    asmE("asmNewDestWrap")?.classList.add("hidden");
+    asmSetJob("new");
+    const t = asmE("asmNewType");
+    if (t) t.value = shipType && [...t.options].some(o => o.value === shipType) ? shipType : "";
+    if (asmE("asmNewShip")) asmE("asmNewShip").value = ship;
+    if (asmE("asmNewGrand")) asmE("asmNewGrand").value = grand;
+    await asmNewAutoFill();
+    asmE("asmNewPanel")?.scrollIntoView?.({block:"start", behavior:"smooth"});
+  }
+
+  /* 등록 · 구성 저장이 끝나면 기준표에 쌓습니다(같은 선종 · 대조립에 호선이 겹치는 PROJECT가 있으면 갱신, 없으면 새로). 실패해도 등록에는 영향이 없습니다. */
+  async function asmUpsertMaster(shipType, ships, grand, projectText, source) {
+    try {
+      ships = [...new Set((ships || []).map(asmShipKey).filter(Boolean))];
+      grand = asmNorm(grand);
+      if (!ships.length || !grand) return;
+      const mids = asmTreeMids(ships[0], grand);
+      if (!mids.length) return;
+      const lines = asmTreeLinesText(mids);
+      const note = mids.find(m => m.grand_note)?.grand_note || "";
+      const type = asmNorm(shipType) || mids.find(m => m.ship_type)?.ship_type || "";
+      await asmLoadMaster(true);
+      const hit = asmMaster.filter(m => m.grand_no === grand && (!type || !m.ship_type || m.ship_type === type) && m.hulls.some(h => ships.includes(h))).pop();
+      const now = new Date().toISOString();
+      if (hit) {
+        const hulls = [...new Set([...hit.hulls, ...ships])].sort(asmNumSort);
+        const {error} = await supabase.from(ASM_MASTER_TABLE).update({ship_type:type || hit.ship_type, hulls, lines, grand_note:note, updated_at:now}).eq("id", hit.id);
+        if (error) throw error;
+      } else {
+        const project = String(projectText || "").trim() || ships.join("/");
+        const {error} = await supabase.from(ASM_MASTER_TABLE).insert({ship_type:type, project, hulls:ships, grand_no:grand, lines, grand_note:note, source:source || "앱 등록"});
+        if (error) throw error;
+      }
+      asmMasterAt = 0;
+    } catch (e) {
+      console.warn("블록 기준표 저장 생략:", e?.message || e);
+    }
+  }
+
   async function asmSaveNewBlock() {
     if (asmTreeSaving) return;
     const status = asmE("asmNewStatus"), btn = asmE("asmNewSave");
@@ -5801,12 +6061,17 @@ HWDK 조립공정 BLK 순차관리 통합 패치
         if (res.error) { if (status) status.textContent = v.ships.length * v.grands.length > 1 ? `${sh} · 대조립 ${g}: ${res.error}` : res.error; return; }
       }
       const madeMany = v.ships.length * v.grands.length;
-      ["asmNewGrand", "asmNewOut", "asmNewMids", "asmNewParts", "asmNewDest", "asmNewNote"].forEach(id => { if (asmE(id)) asmE(id).value = ""; });
+      const projectText = String(asmE("asmNewShip")?.value || "").trim().toUpperCase().replace(/\s+/g, "");
+      ["asmNewGrand", "asmNewOut", "asmNewMids", "asmNewParts", "asmNewDest", "asmNewNote"].forEach(id => { const el = asmE(id); if (el) { el.value = ""; delete el.dataset.auto; } });
       if (asmE("asmNewMode")) asmE("asmNewMode").value = "";
       asmE("asmNewDestWrap")?.classList.add("hidden");
+      asmNewLastTpl = null;
+      asmNewAutoBox("");
       asmRenderNewPreview();
       if (status) status.textContent = "";
       await asmLoadTree(true);
+      /* 기준표에 쌓기: 다음에 같은 PROJECT 다른 호선을 넣으면 자동으로 나옵니다. */
+      for (const g of v.grands) await asmUpsertMaster(v.shipType, v.ships, g, projectText, "신규작업 등록");
       asmRenderBlkOptions();
       /* 등록한 블록을 기존작업에서 바로 고른 상태로 엽니다. */
       asmSetup.type = v.shipType; asmSetup.ship = v.ship; asmSetup.grand = v.grand;
@@ -5830,6 +6095,9 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     btn.dataset.bound = "1";
     btn.onclick = asmSaveNewBlock;
     ["asmNewMids", "asmNewParts", "asmNewGrand", "asmNewShip", "asmNewDest"].forEach(id => asmE(id)?.addEventListener("input", asmRenderNewPreview));
+    /* 선종 · 호선 · 대조립을 넣으면 기준표에서 중조립 · 소조립을 자동으로 채웁니다. */
+    ["asmNewShip", "asmNewGrand"].forEach(id => asmE(id)?.addEventListener("input", asmScheduleNewAuto));
+    asmE("asmNewType")?.addEventListener("change", () => asmNewAutoFill());
     asmE("asmNewMode")?.addEventListener("change", e => { asmE("asmNewDestWrap")?.classList.toggle("hidden", e.target.value !== "out"); asmRenderNewPreview(); });
     ["asmNewGrand", "asmNewMids", "asmNewParts"].forEach(id => asmE(id)?.addEventListener("input", e => {
       const el = e.target, pos = el.selectionStart, up = el.value.toUpperCase();
