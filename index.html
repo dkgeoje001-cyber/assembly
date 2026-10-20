@@ -4423,12 +4423,16 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     const midRowsList = asmMidPairs(f);
     const rowsDone = midRowsList.filter(r => r.done).length;
     const midAvgRows = Math.round(asmAvg(midRowsList.map(r => r.pct)));
-    const extEtas = f.mids.filter(x => x.ext && !x.done).map(x => x.recv?.eta || x.node.mid_eta).filter(Boolean).sort();
+    const extBad = f.mids.filter(x => x.ext && !x.done && x.recv?.arrived && x.recv.bad?.length).length;
+    /* 아직 도착하지 않은 다른 공장 중조립의 입고 예정일(지난 날짜 포함 — 지연이면 그대로 보임) */
+    const extEtas = f.mids.filter(x => x.ext && !x.done && !x.recv?.arrived).map(x => x.recv?.eta || x.node.mid_eta).filter(Boolean).sort();
     const missEtas = [];
     const pushEtas = (s) => (s?.intake?.missing || []).forEach(t => { if (t.eta) missEtas.push(t.eta); });
     f.mids.forEach(x => { if (!x.ext && !x.state.steps["소조립"].passed && !x.partsClosed) pushEtas(x.state.steps["소조립"]); });
     if (f.directIntake && !f.directIntake.passed && !f.directClosed) pushEtas(f.directIntake);
     missEtas.sort();
+    /* 다음 입고 예정 = 오늘 이후 가장 가까운 날(지난 날짜는 '지연'으로 따로 셉니다) */
+    const nextEta = missEtas.find(e => e >= asmToday()) || "";
     const inPct = p.total ? Math.round(p.arrived / p.total * 100) : (f.total ? Math.round(p.midsDone / f.total * 100) : 0);
     /* ① 누르면: 소조립을 한 곳(대조립 BLK · 중조립 하나)에서 입고 확인하면 바로 그 입고 LIST, 여러 곳이면 소조립 줄로 */
     const intakeTargets = [...(f.directIntake && f.direct_parts.length ? [f.grand] : []), ...f.mids.filter(x => !x.ext && x.node.small_parts.length).map(x => x.blk)];
@@ -4442,12 +4446,12 @@ HWDK 조립공정 BLK 순차관리 통합 패치
     const inCard = stepCard("①", "소조립 입고", allIn ? "done" : p.bad || p.late ? "fail" : p.missing || !p.arrived ? "miss" : "working",
       p.total ? `${p.arrived}/${p.total}개 입고 · ${inPct}%` : `입고완료 ${p.midsDone}/${f.total}`, allIn ? 100 : inPct,
       allIn ? (p.closed ? `대조립에서 마무리 ${p.closed}` : "모두 입고 · 외관 양호")
-        : [p.missing ? `미입고 ${p.missing}` : "", p.bad ? `불량 ${p.bad}` : "", p.late ? `지연 ${p.late}` : "", missEtas.length ? `다음 입고 예정 ${asmMD(missEtas[0])}` : p.missing ? "입고 예정일 미정" : ""].filter(Boolean).join(" · ") || "입고 확인 중",
+        : [p.missing ? `미입고 ${p.missing}` : "", p.bad ? `불량 ${p.bad}` : "", p.late ? `지연 ${p.late}` : "", nextEta ? `다음 입고 예정 ${asmMD(nextEta)}` : p.missing && !p.late ? "입고 예정일 미정" : ""].filter(Boolean).join(" · ") || "입고 확인 중",
       allIn ? "입고 보기" : "입고 확인",
       intakeTargets.length === 1 && !allIn ? `data-asm-card-intake="${asmEsc(intakeTargets[0])}"` : `data-asm-scroll="asmFamParts"`);
     const midCard = stepCard("②", "중조립", rowsDone === midRowsList.length ? "done" : failN ? "fail" : pendingN ? "pending" : midAvgRows > 0 ? "working" : "",
       `평균 ${midAvgRows}% · 완료 ${rowsDone}/${midRowsList.length}`, rowsDone === midRowsList.length ? 100 : midAvgRows,
-      [pendingN ? `검사대기 ${pendingN}` : "", failN ? `재작업 ${failN}` : "", f.ext ? `다른 공장 입고 ${f.ext - extOpen}/${f.ext}${extEtas.length ? ` · ${asmMD(extEtas[0])} 입고 예정` : ""}` : ""].filter(Boolean).join(" · ")
+      [pendingN ? `검사대기 ${pendingN}` : "", failN ? `재작업 ${failN}` : "", f.ext ? `다른 공장 입고 ${f.ext - extOpen}/${f.ext}${extEtas.length ? ` · ${asmMD(extEtas[0])} ${extEtas[0] < asmToday() ? "입고 예정 지남(지연)" : "입고 예정"}` : ""}` : "", extBad ? `인수 점검 이상 ${extBad}` : ""].filter(Boolean).join(" · ")
         || (rowsDone === midRowsList.length ? "모두 완료(합격 · 인수 · 마무리)" : midAvgRows > 0 ? "작업중" : "시작 전 · 눌러서 작업 등록"),
       "중조립 작업", midRowsList.length === 1 && !midRowsList[0].pair ? `data-asm-card-goto="${asmEsc(midRowsList[0].items[0].blk)}"` : `data-asm-scroll="asmFamMids"`);
     const grandBig = f.out ? (f.closed ? "반출 완료" : f.ready ? "반출 대기" : "다른 곳")
